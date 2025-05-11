@@ -1,7 +1,7 @@
 
 "use client";
 
-import type * as z from "zod";
+import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -177,3 +177,4 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
     </Form>
   );
 }
+
