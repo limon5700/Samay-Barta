@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { NewsArticle, Category } from '@/lib/types';
-import { getAllNewsArticles, categories as allNewsCategories } from '@/lib/data';
+import { getAllNewsArticles } from '@/lib/data';
+import { categories as allNewsCategories } from '@/lib/constants';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';

@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { NewsArticle, Category } from "@/lib/types";
-import { categories as allNewsCategories } from "@/lib/data";
+import { categories as allNewsCategories } from "@/lib/constants";
 
 const articleFormSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters." }).max(150),
@@ -177,4 +177,3 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
     </Form>
   );
 }
-
