@@ -1,9 +1,10 @@
 
 import type { NewsArticle, Category } from './types';
+import { v4 as uuidv4 } from 'uuid'; // Using uuid for unique IDs
 
 export const categories: Category[] = ["Technology", "Sports", "Business", "World", "Entertainment"];
 
-export const sampleNewsArticles: NewsArticle[] = [
+export let sampleNewsArticles: NewsArticle[] = [
   {
     id: '1',
     title: 'Groundbreaking AI Model Released by Tech Giant',
@@ -75,3 +76,41 @@ export const sampleNewsArticles: NewsArticle[] = [
     dataAiHint: 'running track',
   },
 ];
+
+export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'>;
+
+export function addNewsArticle(articleData: CreateNewsArticleData): NewsArticle {
+  const newArticle: NewsArticle = {
+    ...articleData,
+    id: uuidv4(),
+    publishedDate: new Date().toISOString(),
+  };
+  sampleNewsArticles.unshift(newArticle); // Add to the beginning of the array
+  return newArticle;
+}
+
+export function updateNewsArticle(id: string, updates: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>>): NewsArticle | undefined {
+  const articleIndex = sampleNewsArticles.findIndex(article => article.id === id);
+  if (articleIndex === -1) {
+    return undefined;
+  }
+  const updatedArticle = {
+    ...sampleNewsArticles[articleIndex],
+    ...updates,
+    // Ensure publishedDate and id are not overwritten by partial updates
+    publishedDate: sampleNewsArticles[articleIndex].publishedDate, 
+    id: sampleNewsArticles[articleIndex].id,
+  };
+  sampleNewsArticles[articleIndex] = updatedArticle;
+  return updatedArticle;
+}
+
+export function deleteNewsArticle(id: string): boolean {
+  const initialLength = sampleNewsArticles.length;
+  sampleNewsArticles = sampleNewsArticles.filter(article => article.id !== id);
+  return sampleNewsArticles.length < initialLength;
+}
+
+export function getArticleById(id: string): NewsArticle | undefined {
+  return sampleNewsArticles.find(article => article.id === id);
+}
