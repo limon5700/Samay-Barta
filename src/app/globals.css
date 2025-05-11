@@ -90,4 +90,7 @@
     @apply bg-background text-foreground;
     font-family: var(--font-geist-sans);
   }
+  html.dark body {
+    @apply bg-background text-foreground; /* Ensures body also uses dark mode variables */
+  }
 }

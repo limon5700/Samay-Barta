@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -7,18 +8,20 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';
 import CategoryFilter from '@/components/news/CategoryFilter';
-import { Skeleton } from "@/components/ui/skeleton"; // For loading state
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAppContext } from '@/context/AppContext';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const { getUIText, isClient } = useAppContext();
   
   useEffect(() => {
     // Simulate fetching data
     setIsPageLoading(true);
-    setTimeout(() => { // Simulate network delay
+    setTimeout(() => { 
       setArticles(sampleNewsArticles);
       setIsPageLoading(false);
     }, 1000);
@@ -32,7 +35,7 @@ export default function HomePage() {
       .filter(article =>
         article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        article.category.toLowerCase().includes(searchTerm.toLowerCase()) 
+        (typeof article.category === 'string' && article.category.toLowerCase().includes(searchTerm.toLowerCase()))
       )
       .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
   }, [articles, searchTerm, selectedCategory]);
@@ -69,9 +72,9 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
-      <Header appName="সময় বার্তা Lite" onSearch={handleSearch} />
+      <Header onSearch={handleSearch} />
       <main className="flex-grow">
-        {isPageLoading ? (
+        {isPageLoading || !isClient ? ( // Show skeleton if page loading or not yet client-side hydrated
           <PageSkeleton />
         ) : (
           <div className="container mx-auto px-4 py-8">
@@ -84,7 +87,7 @@ export default function HomePage() {
               <NewsList articles={filteredArticles} />
             ) : (
               <p className="text-center text-muted-foreground mt-16 text-xl">
-                No news articles found matching your criteria.
+                {getUIText("noArticlesFound")}
               </p>
             )}
           </div>

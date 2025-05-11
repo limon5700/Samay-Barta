@@ -1,125 +1,159 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
-import { ArrowLeft, Languages, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 import type { NewsArticle } from '@/lib/types';
 import { sampleNewsArticles } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { translateText } from '@/ai/flows/translate-text-flow';
 import { useToast } from "@/hooks/use-toast";
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Skeleton } from '@/components/ui/skeleton';
-
-interface LanguageOption {
-  value: string;
-  label: string;
-}
-
-const languageOptions: LanguageOption[] = [
-  { value: 'en', label: 'English' },
-  { value: 'bn', label: 'Bengali (বাংলা)' },
-  { value: 'hi', label: 'Hindi (हिन्दी)' },
-  { value: 'es', label: 'Spanish (Español)' },
-  { value: 'fr', label: 'French (Français)' },
-  { value: 'ar', label: 'Arabic (العربية)' },
-  { value: 'de', label: 'German (Deutsch)' },
-  { value: 'ja', label: 'Japanese (日本語)' },
-  { value: 'pt', label: 'Portuguese (Português)' },
-  { value: 'ru', label: 'Russian (Русский)' },
-];
+import { useAppContext } from '@/context/AppContext';
 
 export default function ArticlePage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { language, getUIText, isClient } = useAppContext();
   const id = params.id as string;
 
   const [article, setArticle] = useState<NewsArticle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [targetLanguage, setTargetLanguage] = useState<string>('bn'); // Default to Bengali
-  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  
+  const [displayTitle, setDisplayTitle] = useState<string>('');
   const [displayContent, setDisplayContent] = useState<string>('');
+  
+  // Cache for translations to avoid re-fetching
+  const [translationsCache, setTranslationsCache] = useState<Record<string, { title: string, content: string }>>({});
 
 
   useEffect(() => {
-    if (id) {
+    if (id && isClient) { // Ensure isClient before fetching/setting article
       setIsLoading(true);
       // Simulate fetching article data
       setTimeout(() => {
         const foundArticle = sampleNewsArticles.find(art => art.id === id);
         if (foundArticle) {
           setArticle(foundArticle);
-          setDisplayContent(foundArticle.content); 
+          // Set initial display content based on current language
+          // This will be handled by the translation useEffect below
         } else {
-          // Handle article not found, perhaps redirect or show error
-          toast({ title: "Error", description: "Article not found.", variant: "destructive" });
+          toast({ title: getUIText("error") || "Error", description: getUIText("articleNotFound"), variant: "destructive" });
           router.push('/'); 
         }
         setIsLoading(false);
       }, 500);
+    } else if (!isClient && id) {
+      // For SSR, find article but don't set display content yet (handled by skeleton)
+      const foundArticle = sampleNewsArticles.find(art => art.id === id);
+      setArticle(foundArticle); // Allow skeleton to use basic article info
+      setIsLoading(false); // Consider if loading should be true until client hydration for translation
     }
-  }, [id, router, toast]);
+  }, [id, router, toast, getUIText, isClient]);
 
-  const handleTranslate = useCallback(async () => {
-    if (!article || !targetLanguage) return;
+
+  const performTranslation = useCallback(async () => {
+    if (!article || !language || !isClient) return;
+
+    // Assuming 'en' is the original language of the article content
+    if (language === 'en') {
+      setDisplayTitle(article.title);
+      setDisplayContent(article.content);
+      return;
+    }
+
+    // Check cache first
+    if (translationsCache[language]) {
+      setDisplayTitle(translationsCache[language].title);
+      setDisplayContent(translationsCache[language].content);
+      return;
+    }
 
     setIsTranslating(true);
-    setTranslatedContent(null); 
     try {
-      const result = await translateText({ text: article.content, targetLanguage });
-      setTranslatedContent(result.translatedText);
-      setDisplayContent(result.translatedText);
-      toast({
-        title: "Translation Successful",
-        description: `Article translated to ${languageOptions.find(l => l.value === targetLanguage)?.label || targetLanguage}.`,
-      });
+      const [titleResult, contentResult] = await Promise.all([
+        translateText({ text: article.title, targetLanguage: language }),
+        translateText({ text: article.content, targetLanguage: language })
+      ]);
+      
+      setDisplayTitle(titleResult.translatedText);
+      setDisplayContent(contentResult.translatedText);
+      
+      // Update cache
+      setTranslationsCache(prev => ({ ...prev, [language]: { title: titleResult.translatedText, content: contentResult.translatedText } }));
+
+      // toast({
+      //   title: getUIText("translationSuccessful"),
+      //   description: `${getUIText("articleTranslatedTo")} ${language}.`,
+      // });
     } catch (error) {
       console.error("Error translating article:", error);
       toast({
-        title: "Translation Failed",
-        description: "Could not translate the article. Please try again.",
+        title: getUIText("translationFailed"),
+        description: getUIText("couldNotTranslateArticle"),
         variant: "destructive",
       });
-      setDisplayContent(article.content); // Revert to original on error
+      // Fallback to original content on error
+      setDisplayTitle(article.title);
+      setDisplayContent(article.content);
     } finally {
       setIsTranslating(false);
     }
-  }, [article, targetLanguage, toast]);
+  }, [article, language, toast, getUIText, isClient, translationsCache]);
 
-  const handleShowOriginal = () => {
-    if (article) {
-      setDisplayContent(article.content);
-      setTranslatedContent(null); // Clear translation if showing original
-      toast({
-        title: "Displaying Original",
-        description: "Showing the original article content.",
-      });
+  useEffect(() => {
+    if (article && isClient) { // Only run translation logic on client and if article exists
+      performTranslation();
+    } else if (article && !isClient) {
+        // SSR: set initial display to original english
+        setDisplayTitle(article.title);
+        setDisplayContent(article.content);
     }
-  };
+  }, [article, language, isClient, performTranslation]);
 
 
-  if (isLoading) {
+  if (!isClient && !article) { // Pure SSR, no article yet (should not happen if id is present)
     return (
       <div className="flex flex-col min-h-screen bg-background">
-        <Header appName="সময় বার্তা Lite" onSearch={() => {}} />
+        {/* Minimal Header for SSR */}
+        <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
+            <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+                <div className="text-3xl font-bold text-primary animate-pulse bg-muted-foreground/20 h-9 w-48 rounded-md"></div>
+                 <div className="w-10 h-10 animate-pulse bg-muted-foreground/20 rounded-md" />
+            </div>
+        </header>
+        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+
+  if (isLoading || (isClient && !article && id)) { // Loading on client, or client has id but article not fetched yet
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        <Header onSearch={(term) => router.push(`/?search=${term}`)} />
         <main className="flex-grow container mx-auto px-4 py-8">
-          <Skeleton className="h-8 w-24 mb-6 rounded-md" /> {/* Back button skeleton */}
+          <Skeleton className="h-8 w-24 mb-6 rounded-md" />
           <Card className="shadow-lg">
             <CardHeader>
-              <Skeleton className="h-10 w-3/4 mb-2 rounded-md" /> {/* Title skeleton */}
-              <Skeleton className="h-40 w-full rounded-md mb-4" /> {/* Image skeleton */}
+              <Skeleton className="h-10 w-3/4 mb-2 rounded-md" />
+              <Skeleton className="h-40 w-full rounded-md mb-4 sm:h-64 md:h-96" />
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
-                <Skeleton className="h-6 w-20 rounded-md" /> {/* Badge skeleton */}
-                <Skeleton className="h-6 w-32 rounded-md" /> {/* Date skeleton */}
+                <Skeleton className="h-6 w-20 rounded-md" />
+                <Skeleton className="h-6 w-32 rounded-md" />
               </div>
             </CardHeader>
             <CardContent className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none dark:prose-invert">
@@ -128,13 +162,6 @@ export default function ArticlePage() {
               <Skeleton className="h-6 w-5/6 mb-2 rounded-md" />
             </CardContent>
           </Card>
-           <div className="mt-6 p-4 border rounded-lg shadow-sm bg-card">
-              <Skeleton className="h-8 w-40 mb-4 rounded-md" /> {/* Translator title skeleton */}
-              <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <Skeleton className="h-10 w-full sm:w-48 rounded-md" /> {/* Select skeleton */}
-                <Skeleton className="h-10 w-full sm:w-36 rounded-md" /> {/* Translate button skeleton */}
-              </div>
-            </div>
         </main>
         <Footer />
       </div>
@@ -142,12 +169,11 @@ export default function ArticlePage() {
   }
 
   if (!article) {
-    // This case should ideally be handled by redirection in useEffect or a dedicated 404 page
     return (
        <div className="flex flex-col min-h-screen bg-background">
-        <Header appName="সময় বার্তা Lite" onSearch={() => {}} />
+        <Header onSearch={(term) => router.push(`/?search=${term}`)} />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-          <p className="text-2xl text-muted-foreground">Article not found.</p>
+          <p className="text-2xl text-muted-foreground">{getUIText("articleNotFound")}</p>
         </main>
         <Footer />
       </div>
@@ -158,11 +184,11 @@ export default function ArticlePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header appName="সময় বার্তা Lite" onSearch={(term) => router.push(`/?search=${term}`)} />
+      <Header onSearch={(term) => router.push(`/?search=${term}`)} />
       <main className="flex-grow container mx-auto px-4 py-8">
         <Button variant="outline" onClick={() => router.back()} className="mb-6 group">
           <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          Back to News
+          {getUIText("backToNews")}
         </Button>
 
         <Card className="shadow-xl rounded-xl overflow-hidden">
@@ -170,7 +196,7 @@ export default function ArticlePage() {
             <div className="relative w-full h-64 md:h-96">
               <Image
                 src={article.imageUrl}
-                alt={article.title}
+                alt={isTranslating && !displayTitle ? (getUIText("loading") || "Loading...") : displayTitle}
                 fill={true}
                 style={{objectFit:"cover"}}
                 priority
@@ -179,65 +205,38 @@ export default function ArticlePage() {
             </div>
           )}
           <CardHeader className="p-6">
-            <CardTitle className="text-3xl md:text-4xl font-bold leading-tight mb-3 text-primary">
-              {article.title}
-            </CardTitle>
+            {isTranslating && !displayTitle ? (
+                <Skeleton className="h-10 w-3/4 mb-3 rounded-md" />
+            ) : (
+                <CardTitle className="text-3xl md:text-4xl font-bold leading-tight mb-3 text-primary">
+                {displayTitle}
+                </CardTitle>
+            )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground mb-4">
-              <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge>
-              <span>Published: {formattedDate}</span>
+              <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge> {/* Category might need translation */}
+              <span>{isClient ? getUIText("publishedDateLabel") || "Published" : "Published"}: {formattedDate}</span>
             </div>
           </CardHeader>
           <CardContent className="p-6 pt-0">
-            <article className="prose prose-base sm:prose-lg lg:prose-xl max-w-none dark:prose-invert text-foreground/90 leading-relaxed whitespace-pre-wrap">
-              {displayContent}
-            </article>
+            {isTranslating && !displayContent ? (
+                <>
+                    <Skeleton className="h-6 w-full mb-2 rounded-md" />
+                    <Skeleton className="h-6 w-full mb-2 rounded-md" />
+                    <Skeleton className="h-6 w-5/6 mb-2 rounded-md" />
+                </>
+            ) : (
+                <article className="prose prose-base sm:prose-lg lg:prose-xl max-w-none dark:prose-invert text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                {displayContent}
+                </article>
+            )}
           </CardContent>
         </Card>
-
-        <Card className="mt-8 p-6 shadow-lg rounded-xl">
-          <h3 className="text-xl font-semibold mb-4 flex items-center text-primary">
-            <Languages className="mr-2 h-6 w-6" />
-            Translate Article
-          </h3>
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch">
-            <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-              <SelectTrigger className="w-full sm:w-auto sm:min-w-[200px] text-base py-3">
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
-              <SelectContent>
-                {languageOptions.map(lang => (
-                  <SelectItem key={lang.value} value={lang.value} className="text-base py-2">
-                    {lang.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              onClick={handleTranslate} 
-              disabled={isTranslating || !article}
-              className="w-full sm:w-auto text-base py-3 px-6"
-            >
-              {isTranslating ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Translating...
-                </>
-              ) : (
-                "Translate Content"
-              )}
-            </Button>
-             {translatedContent && (
-                <Button 
-                  onClick={handleShowOriginal} 
-                  variant="outline"
-                  className="w-full sm:w-auto text-base py-3 px-6"
-                  disabled={isTranslating}
-                >
-                  Show Original
-                </Button>
-              )}
-          </div>
-        </Card>
+        {isTranslating && (
+            <div className="mt-8 text-center flex items-center justify-center text-primary">
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                <span>{getUIText("translating")}</span>
+            </div>
+        )}
       </main>
       <Footer />
     </div>

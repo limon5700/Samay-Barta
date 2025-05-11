@@ -4,9 +4,10 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { AppProvider } from '@/context/AppContext';
 
 export const metadata: Metadata = {
-  title: 'সময় বার্তা Lite | Samay Barta Lite',
+  title: 'সময় বার্তা লাইট | Samay Barta Lite',
   description: 'Your concise news source, powered by AI.',
 };
 
@@ -16,10 +17,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="bn" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className={`antialiased font-sans`}>
-        {children}
-        <Toaster />
+        <AppProvider>
+          {children}
+          <Toaster />
+        </AppProvider>
       </body>
     </html>
   );
