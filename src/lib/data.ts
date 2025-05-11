@@ -1,10 +1,10 @@
-
 import type { NewsArticle, Category } from './types';
 import { v4 as uuidv4 } from 'uuid'; // Using uuid for unique IDs
 
 export const categories: Category[] = ["Technology", "Sports", "Business", "World", "Entertainment"];
 
-export let sampleNewsArticles: NewsArticle[] = [
+// Default articles if localStorage is empty or on first load
+const initialSampleNewsArticles: NewsArticle[] = [
   {
     id: '1',
     title: 'Groundbreaking AI Model Released by Tech Giant',
@@ -77,6 +77,54 @@ export let sampleNewsArticles: NewsArticle[] = [
   },
 ];
 
+const LOCAL_STORAGE_KEY = 'samayBartaNewsArticles';
+
+// This variable will hold the current state of news articles.
+// It's initialized from localStorage or with default data.
+export let sampleNewsArticles: NewsArticle[];
+
+function loadArticlesFromLocalStorage(): NewsArticle[] {
+  if (typeof window !== 'undefined') { // Check if running on the client side
+    const storedArticles = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (storedArticles) {
+      try {
+        const parsedArticles = JSON.parse(storedArticles);
+        // Basic validation: check if it's an array
+        if (Array.isArray(parsedArticles)) {
+          return parsedArticles;
+        }
+        console.warn('Stored articles data is not an array, using default.');
+      } catch (e) {
+        console.error("Failed to parse articles from localStorage, using default.", e);
+        localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted data
+      }
+    }
+  }
+  // If server-side, no localStorage, or localStorage is empty/corrupt, return a copy of initial articles
+  return [...initialSampleNewsArticles];
+}
+
+function saveArticlesToLocalStorage() {
+  if (typeof window !== 'undefined') { // Check if running on the client side
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sampleNewsArticles));
+    } catch (e) {
+      console.error("Failed to save articles to localStorage", e);
+    }
+  }
+}
+
+// Initialize sampleNewsArticles when the module loads on the client
+if (typeof window !== 'undefined') {
+    sampleNewsArticles = loadArticlesFromLocalStorage();
+    // Ensure that localStorage has the data, especially if it was empty or reset
+    saveArticlesToLocalStorage();
+} else {
+    // For SSR, initialize with defaults. Client will hydrate with localStorage.
+    sampleNewsArticles = [...initialSampleNewsArticles];
+}
+
+
 export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'>;
 
 export function addNewsArticle(articleData: CreateNewsArticleData): NewsArticle {
@@ -86,6 +134,7 @@ export function addNewsArticle(articleData: CreateNewsArticleData): NewsArticle 
     publishedDate: new Date().toISOString(),
   };
   sampleNewsArticles.unshift(newArticle); // Add to the beginning of the array
+  saveArticlesToLocalStorage();
   return newArticle;
 }
 
@@ -102,15 +151,21 @@ export function updateNewsArticle(id: string, updates: Partial<Omit<NewsArticle,
     id: sampleNewsArticles[articleIndex].id,
   };
   sampleNewsArticles[articleIndex] = updatedArticle;
+  saveArticlesToLocalStorage();
   return updatedArticle;
 }
 
 export function deleteNewsArticle(id: string): boolean {
-  const initialLength = sampleNewsArticles.length;
-  sampleNewsArticles = sampleNewsArticles.filter(article => article.id !== id);
-  return sampleNewsArticles.length < initialLength;
+  const articleIndex = sampleNewsArticles.findIndex(article => article.id === id);
+  if (articleIndex !== -1) {
+    sampleNewsArticles.splice(articleIndex, 1);
+    saveArticlesToLocalStorage();
+    return true; // Article found and deleted
+  }
+  return false; // Article not found
 }
 
 export function getArticleById(id: string): NewsArticle | undefined {
+  // The sampleNewsArticles array is now sourced from localStorage on client-side load.
   return sampleNewsArticles.find(article => article.id === id);
 }
