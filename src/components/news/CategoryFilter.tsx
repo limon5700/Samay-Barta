@@ -42,23 +42,25 @@ export default function CategoryFilter({
   const [displayCategories, setDisplayCategories] = useState<(Category | "All")[]>([]);
 
   useEffect(() => {
+    const safePropCategories = Array.isArray(categories) ? categories : [];
     if (isClient) {
-      setDisplayCategories(["All", ...categories]);
+      setDisplayCategories(["All", ...safePropCategories]);
     } else {
-      // Fallback for SSR if needed, or just use original categories
-      setDisplayCategories(["All", ...categories]);
+      // Fallback for SSR or when isClient is false initially
+      setDisplayCategories(["All", ...safePropCategories]);
     }
   }, [isClient, categories]);
 
 
-  if (!isClient && displayCategories.length === 0) {
+  if (!isClient) {
     // Render a placeholder or basic version for SSR if categories are not ready
     // This helps prevent hydration errors if getUIText is not fully ready on initial server render
+    const safeCategoriesForSsr = Array.isArray(categories) ? categories : [];
     return (
       <div className="mb-8 flex flex-wrap gap-2 justify-center">
-        {(["All", ...categories]).map((category) => (
+        {(["All", ...safeCategoriesForSsr]).map((category) => (
           <Button key={category} variant="outline" disabled>
-            {category}
+            {category} {/* Show raw category name for SSR placeholder */}
           </Button>
         ))}
       </div>
@@ -71,7 +73,7 @@ export default function CategoryFilter({
       {displayCategories.map((category) => {
         const Icon = categoryIcons[category as Category] || List;
         const uiTextKey = categoryUiTextKeys[category as string] || category as string;
-        const translatedCategoryName = isClient ? getUIText(uiTextKey) : category;
+        const translatedCategoryName = getUIText(uiTextKey);
         
         return (
           <Button
@@ -92,3 +94,4 @@ export default function CategoryFilter({
     </div>
   );
 }
+
