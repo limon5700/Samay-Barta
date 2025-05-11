@@ -25,10 +25,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm";
 import type { NewsArticle } from "@/lib/types";
 import {
-  sampleNewsArticles,
-  addNewsArticle as addArticleData,
-  updateNewsArticle as updateArticleData,
-  deleteNewsArticle as deleteArticleData,
+  getAllNewsArticles,
+  addNewsArticle,
+  updateNewsArticle,
+  deleteNewsArticle,
   CreateNewsArticleData
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
@@ -46,17 +46,22 @@ export default function DashboardPage() {
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Simulate fetching articles
+  const fetchArticles = useCallback(async () => {
     setIsLoading(true);
-    // In a real app, fetch from API/DB. Here we use the mutable sample data.
-    setArticles([...sampleNewsArticles].sort((a,b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
-    setIsLoading(false);
-  }, []);
+    try {
+      const fetchedArticles = await getAllNewsArticles();
+      setArticles(fetchedArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch articles.", variant: "destructive" });
+      setArticles([]); // Set to empty array on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
-  const refreshArticles = () => {
-     setArticles([...sampleNewsArticles].sort((a,b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
-  }
+  useEffect(() => {
+    fetchArticles();
+  }, [fetchArticles]);
 
   const handleAddArticle = () => {
     setEditingArticle(null);
@@ -77,17 +82,15 @@ export default function DashboardPage() {
     if (!articleToDelete) return;
     setIsSubmitting(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const success = deleteArticleData(articleToDelete.id);
+      const success = await deleteNewsArticle(articleToDelete.id);
       if (success) {
-        refreshArticles();
+        await fetchArticles(); // Refresh articles from DB
         toast({ title: "Success", description: "Article deleted successfully." });
       } else {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
       }
     } catch (error) {
-      toast({ title: "Error", description: "An error occurred.", variant: "destructive" });
+      toast({ title: "Error", description: "An error occurred while deleting the article.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
       setIsDeleteDialogOpen(false);
@@ -98,20 +101,22 @@ export default function DashboardPage() {
   const handleFormSubmit = async (data: ArticleFormData) => {
     setIsSubmitting(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
       if (editingArticle) {
-        const result = updateArticleData(editingArticle.id, data as Partial<Omit<NewsArticle, 'id' | 'publishedDate'>>);
+        const result = await updateNewsArticle(editingArticle.id, data as Partial<Omit<NewsArticle, 'id' | 'publishedDate'>>);
         if (result) {
           toast({ title: "Success", description: "Article updated successfully." });
         } else {
            toast({ title: "Error", description: "Failed to update article.", variant: "destructive" });
         }
       } else {
-        addArticleData(data as CreateNewsArticleData);
-        toast({ title: "Success", description: "Article added successfully." });
+        const result = await addNewsArticle(data as CreateNewsArticleData);
+         if (result) {
+            toast({ title: "Success", description: "Article added successfully." });
+        } else {
+            toast({ title: "Error", description: "Failed to add article.", variant: "destructive" });
+        }
       }
-      refreshArticles();
+      await fetchArticles(); // Refresh articles from DB
       setIsAddEditDialogOpen(false);
       setEditingArticle(null);
     } catch (error) {

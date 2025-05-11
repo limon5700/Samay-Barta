@@ -8,7 +8,7 @@ import { format, parseISO } from 'date-fns';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
 import type { NewsArticle } from '@/lib/types';
-import { sampleNewsArticles } from '@/lib/data';
+import { getArticleById } from '@/lib/data'; // Updated data source
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,46 +33,42 @@ export default function ArticlePage() {
   const [displayTitle, setDisplayTitle] = useState<string>('');
   const [displayContent, setDisplayContent] = useState<string>('');
   
-  // Cache for translations to avoid re-fetching
   const [translationsCache, setTranslationsCache] = useState<Record<string, { title: string, content: string }>>({});
 
-
   useEffect(() => {
-    if (id && isClient) { // Ensure isClient before fetching/setting article
+    const fetchArticle = async () => {
+      if (!id || !isClient) return;
       setIsLoading(true);
-      // Simulate fetching article data
-      setTimeout(() => {
-        const foundArticle = sampleNewsArticles.find(art => art.id === id);
+      try {
+        const foundArticle = await getArticleById(id);
         if (foundArticle) {
           setArticle(foundArticle);
-          // Set initial display content based on current language
-          // This will be handled by the translation useEffect below
+          // Initial display will be set by translation useEffect
         } else {
           toast({ title: getUIText("error") || "Error", description: getUIText("articleNotFound"), variant: "destructive" });
-          router.push('/'); 
+          // router.push('/'); // Consider if redirect is always desired
         }
+      } catch (error) {
+        console.error("Failed to fetch article:", error);
+        toast({ title: getUIText("error") || "Error", description: "Failed to load article details.", variant: "destructive" });
+      } finally {
         setIsLoading(false);
-      }, 500);
-    } else if (!isClient && id) {
-      // For SSR, find article but don't set display content yet (handled by skeleton)
-      const foundArticle = sampleNewsArticles.find(art => art.id === id);
-      setArticle(foundArticle); // Allow skeleton to use basic article info
-      setIsLoading(false); // Consider if loading should be true until client hydration for translation
-    }
-  }, [id, router, toast, getUIText, isClient]);
+      }
+    };
+
+    fetchArticle();
+  }, [id, isClient, toast, getUIText, router]);
 
 
   const performTranslation = useCallback(async () => {
     if (!article || !language || !isClient) return;
 
-    // Assuming 'en' is the original language of the article content
-    if (language === 'en') {
+    if (language === 'en') { // Assuming 'en' is the original language of the article content
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
       return;
     }
 
-    // Check cache first
     if (translationsCache[language]) {
       setDisplayTitle(translationsCache[language].title);
       setDisplayContent(translationsCache[language].content);
@@ -86,16 +82,14 @@ export default function ArticlePage() {
         translateText({ text: article.content, targetLanguage: language })
       ]);
       
-      setDisplayTitle(titleResult.translatedText);
-      setDisplayContent(contentResult.translatedText);
-      
-      // Update cache
-      setTranslationsCache(prev => ({ ...prev, [language]: { title: titleResult.translatedText, content: contentResult.translatedText } }));
+      const newTitle = titleResult.translatedText;
+      const newContent = contentResult.translatedText;
 
-      // toast({
-      //   title: getUIText("translationSuccessful"),
-      //   description: `${getUIText("articleTranslatedTo")} ${language}.`,
-      // });
+      setDisplayTitle(newTitle);
+      setDisplayContent(newContent);
+      
+      setTranslationsCache(prev => ({ ...prev, [language]: { title: newTitle, content: newContent } }));
+
     } catch (error) {
       console.error("Error translating article:", error);
       toast({
@@ -103,7 +97,6 @@ export default function ArticlePage() {
         description: getUIText("couldNotTranslateArticle"),
         variant: "destructive",
       });
-      // Fallback to original content on error
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
     } finally {
@@ -112,20 +105,20 @@ export default function ArticlePage() {
   }, [article, language, toast, getUIText, isClient, translationsCache]);
 
   useEffect(() => {
-    if (article && isClient) { // Only run translation logic on client and if article exists
+    if (article && isClient) {
       performTranslation();
     } else if (article && !isClient) {
-        // SSR: set initial display to original english
+        // SSR: set initial display to original english (or default language)
         setDisplayTitle(article.title);
         setDisplayContent(article.content);
     }
   }, [article, language, isClient, performTranslation]);
 
 
-  if (!isClient && !article) { // Pure SSR, no article yet (should not happen if id is present)
+  if (!isClient && !id) { 
+     // Minimal SSR if no ID yet (should be rare if routing is correct)
     return (
       <div className="flex flex-col min-h-screen bg-background">
-        {/* Minimal Header for SSR */}
         <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
             <div className="container mx-auto px-4 py-4 flex justify-between items-center">
                 <div className="text-3xl font-bold text-primary animate-pulse bg-muted-foreground/20 h-9 w-48 rounded-md"></div>
@@ -141,7 +134,7 @@ export default function ArticlePage() {
   }
 
 
-  if (isLoading || (isClient && !article && id)) { // Loading on client, or client has id but article not fetched yet
+  if (isLoading) { // Covers initial client load and loading article data
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <Header onSearch={(term) => router.push(`/?search=${term}`)} />
@@ -168,7 +161,7 @@ export default function ArticlePage() {
     );
   }
 
-  if (!article) {
+  if (!article && !isLoading) { // Article fetch finished, but not found
     return (
        <div className="flex flex-col min-h-screen bg-background">
         <Header onSearch={(term) => router.push(`/?search=${term}`)} />
@@ -179,6 +172,10 @@ export default function ArticlePage() {
       </div>
     );
   }
+  
+  // This check is mostly for TypeScript to be happy, as article should exist by now
+  if (!article) return null; 
+
 
   const formattedDate = article.publishedDate ? format(parseISO(article.publishedDate), "MMMM d, yyyy 'at' h:mm a") : "N/A";
 
@@ -196,7 +193,7 @@ export default function ArticlePage() {
             <div className="relative w-full h-64 md:h-96">
               <Image
                 src={article.imageUrl}
-                alt={isTranslating && !displayTitle ? (getUIText("loading") || "Loading...") : displayTitle}
+                alt={isTranslating && !displayTitle ? (getUIText("loading") || "Loading...") : displayTitle || article.title}
                 fill={true}
                 style={{objectFit:"cover"}}
                 priority
@@ -209,11 +206,11 @@ export default function ArticlePage() {
                 <Skeleton className="h-10 w-3/4 mb-3 rounded-md" />
             ) : (
                 <CardTitle className="text-3xl md:text-4xl font-bold leading-tight mb-3 text-primary">
-                {displayTitle}
+                {displayTitle || article.title}
                 </CardTitle>
             )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground mb-4">
-              <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge> {/* Category might need translation */}
+              <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge>
               <span>{isClient ? getUIText("publishedDateLabel") || "Published" : "Published"}: {formattedDate}</span>
             </div>
           </CardHeader>
@@ -226,7 +223,7 @@ export default function ArticlePage() {
                 </>
             ) : (
                 <article className="prose prose-base sm:prose-lg lg:prose-xl max-w-none dark:prose-invert text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                {displayContent}
+                {displayContent || article.content}
                 </article>
             )}
           </CardContent>

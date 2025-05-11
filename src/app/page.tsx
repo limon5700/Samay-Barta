@@ -3,13 +3,14 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { NewsArticle, Category } from '@/lib/types';
-import { sampleNewsArticles, categories as allNewsCategories } from '@/lib/data';
+import { getAllNewsArticles, categories as allNewsCategories } from '@/lib/data';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';
 import CategoryFilter from '@/components/news/CategoryFilter';
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppContext } from '@/context/AppContext';
+import { useToast } from '@/hooks/use-toast';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -17,15 +18,26 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [isPageLoading, setIsPageLoading] = useState(true);
   const { getUIText, isClient } = useAppContext();
+  const { toast } = useToast();
   
   useEffect(() => {
-    // Simulate fetching data
-    setIsPageLoading(true);
-    setTimeout(() => { 
-      setArticles(sampleNewsArticles);
-      setIsPageLoading(false);
-    }, 1000);
-  }, []);
+    const fetchArticles = async () => {
+      if (!isClient) return; // Ensure this runs only on client after hydration
+      setIsPageLoading(true);
+      try {
+        const fetchedArticles = await getAllNewsArticles();
+        setArticles(fetchedArticles);
+      } catch (error) {
+        console.error("Failed to fetch articles:", error);
+        toast({ title: "Error", description: "Failed to load news articles.", variant: "destructive" });
+        setArticles([]); // Set to empty on error
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+    
+    fetchArticles();
+  }, [isClient, toast]);
 
   const filteredArticles = useMemo(() => {
     return articles
@@ -37,7 +49,9 @@ export default function HomePage() {
         article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) || 
         (typeof article.category === 'string' && article.category.toLowerCase().includes(searchTerm.toLowerCase()))
       )
-      .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+      // Sorting is now handled by the database query in getAllNewsArticles (by publishedDate desc)
+      // If client-side sort is still desired for some reason, it can be added back:
+      // .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
   }, [articles, searchTerm, selectedCategory]);
 
   const handleSearch = useCallback((term: string) => {
@@ -74,7 +88,7 @@ export default function HomePage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
       <Header onSearch={handleSearch} />
       <main className="flex-grow">
-        {isPageLoading || !isClient ? ( // Show skeleton if page loading or not yet client-side hydrated
+        {isPageLoading ? ( 
           <PageSkeleton />
         ) : (
           <div className="container mx-auto px-4 py-8">

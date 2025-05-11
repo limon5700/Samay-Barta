@@ -1,6 +1,6 @@
 
 export interface NewsArticle {
-  id: string;
+  id: string; // This will be MongoDB's _id.toHexString()
   title: string;
   content: string; // Full content for summarizer
   excerpt: string; // Short excerpt for display
