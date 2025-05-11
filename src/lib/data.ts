@@ -1,7 +1,8 @@
+'use server';
 
 import type { NewsArticle, Category } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
-import { v4 as uuidv4 } from 'uuid'; // Keep for client-side generation if needed, but _id from mongo is primary
+// import { v4 as uuidv4 } from 'uuid'; // Keep for client-side generation if needed, but _id from mongo is primary
 
 export const categories: Category[] = ["Technology", "Sports", "Business", "World", "Entertainment"];
 
@@ -106,7 +107,10 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
     return articlesArray.map(mapMongoDocumentToNewsArticle);
   } catch (error) {
     console.error("Error fetching all news articles:", error);
-    return []; // Return empty array on error
+    // It's often better to throw the error or handle it more gracefully
+    // than returning potentially misleading empty data.
+    // For now, returning empty array as per original logic.
+    return []; 
   }
 }
 
