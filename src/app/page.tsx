@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -8,9 +7,6 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';
 import CategoryFilter from '@/components/news/CategoryFilter';
-import SummarizerModal from '@/components/news/SummarizerModal';
-import { summarizeNewsArticle } from '@/ai/flows/summarize-news-article';
-import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton"; // For loading state
 
 export default function HomePage() {
@@ -18,16 +14,7 @@ export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [isPageLoading, setIsPageLoading] = useState(true);
-
-  // For Summarizer Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [articleToSummarize, setArticleToSummarize] = useState<NewsArticle | null>(null);
-  const [summary, setSummary] = useState('');
-  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
-  const [summaryError, setSummaryError] = useState('');
   
-  const { toast } = useToast();
-
   useEffect(() => {
     // Simulate fetching data
     setIsPageLoading(true);
@@ -44,7 +31,7 @@ export default function HomePage() {
       )
       .filter(article =>
         article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) || // Search excerpt too
+        article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) || 
         article.category.toLowerCase().includes(searchTerm.toLowerCase()) 
       )
       .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
@@ -56,42 +43,6 @@ export default function HomePage() {
 
   const handleSelectCategory = useCallback((category: Category | 'All') => {
     setSelectedCategory(category);
-  }, []);
-
-  const handleSummarize = useCallback(async (article: NewsArticle) => {
-    setArticleToSummarize(article);
-    setIsModalOpen(true);
-    setIsLoadingSummary(true);
-    setSummary('');
-    setSummaryError('');
-    try {
-      const result = await summarizeNewsArticle({ articleContent: article.content });
-      setSummary(result.summary);
-      toast({
-        title: "Summary Generated",
-        description: `AI summary for "${article.title}" is ready.`,
-      });
-    } catch (error) {
-      console.error("Error summarizing article:", error);
-      setSummaryError("Failed to summarize the article. Please try again.");
-      toast({
-        title: "Summarization Failed",
-        description: "Could not generate AI summary. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingSummary(false);
-    }
-  }, [toast]);
-
-  const closeModal = useCallback(() => {
-    setIsModalOpen(false);
-    // Wait for modal to close before resetting, avoids flash of old content
-    setTimeout(() => {
-      setArticleToSummarize(null);
-      setSummary('');
-      setSummaryError('');
-    }, 300);
   }, []);
 
   const PageSkeleton = () => (
@@ -130,7 +81,7 @@ export default function HomePage() {
               onSelectCategory={handleSelectCategory}
             />
             {filteredArticles.length > 0 ? (
-              <NewsList articles={filteredArticles} onSummarize={handleSummarize} />
+              <NewsList articles={filteredArticles} />
             ) : (
               <p className="text-center text-muted-foreground mt-16 text-xl">
                 No news articles found matching your criteria.
@@ -140,16 +91,6 @@ export default function HomePage() {
         )}
       </main>
       <Footer />
-      {articleToSummarize && ( // Ensure modal is only rendered when an article is selected
-        <SummarizerModal
-          isOpen={isModalOpen}
-          onClose={closeModal}
-          articleTitle={articleToSummarize.title}
-          summary={summary}
-          isLoading={isLoadingSummary}
-          error={summaryError}
-        />
-      )}
     </div>
   );
 }

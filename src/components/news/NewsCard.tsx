@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { NewsArticle } from "@/lib/types";
@@ -6,15 +5,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Brain } from "lucide-react";
+import { CalendarDays, ArrowRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import Link from "next/link";
 
 interface NewsCardProps {
   article: NewsArticle;
-  onSummarize: (article: NewsArticle) => void;
 }
 
-export default function NewsCard({ article, onSummarize }: NewsCardProps) {
+export default function NewsCard({ article }: NewsCardProps) {
   const formattedDate = article.publishedDate ? format(parseISO(article.publishedDate), "MMMM d, yyyy") : "N/A";
 
   return (
@@ -45,14 +44,16 @@ export default function NewsCard({ article, onSummarize }: NewsCardProps) {
       </CardContent>
       <CardFooter>
         <Button
-          onClick={() => onSummarize(article)}
+          asChild
           variant="default"
           size="sm"
           className="w-full transition-transform duration-200 hover:scale-105"
-          aria-label={`Summarize article: ${article.title}`}
+          aria-label={`Read more about ${article.title}`}
         >
-          <Brain className="mr-2 h-4 w-4" />
-          AI Summarize
+          <Link href={`/article/${article.id}`}>
+            See More
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
         </Button>
       </CardFooter>
     </Card>
