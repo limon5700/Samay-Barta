@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Helper function to format layout section names for display
 export function formatSectionName(section: string | undefined | null): string {
-   // Extra safety checks: ensure 'section' is a non-empty string before calling replace
+  // Extra safety checks: ensure 'section' is a non-empty string before calling replace
   if (typeof section !== 'string' || !section) {
     // console.warn("formatSectionName received invalid input:", section);
     return 'N/A'; // Return 'N/A' or similar for invalid/missing sections

@@ -38,6 +38,8 @@ const layoutStructure: { name: string; section: LayoutSection; description: stri
   { name: "Footer", section: 'footer', description: "Site footer area." },
 ];
 
+const validSections = new Set(layoutStructure.map(s => s.section));
+
 export default function LayoutEditorPage() {
   const [gadgets, setGadgets] = useState<Gadget[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,8 +151,13 @@ export default function LayoutEditorPage() {
     }
   };
 
-  // Group gadgets by section
+  // Group gadgets by section, safely handling invalid/missing sections
   const gadgetsBySection = gadgets.reduce((acc, gadget) => {
+    // Ensure gadget.section is a valid section defined in layoutStructure
+    if (!gadget.section || !validSections.has(gadget.section)) {
+      console.warn(`Gadget ${gadget.id} has invalid or missing section: "${gadget.section}". Skipping.`);
+      return acc; // Skip gadgets with invalid/missing sections
+    }
     const section = gadget.section;
     if (!acc[section]) {
       acc[section] = [];
@@ -170,8 +177,29 @@ export default function LayoutEditorPage() {
     );
   }
 
+  // Explanation for the user regarding the 404 and CORS errors
+  const errorExplanation = (
+     <Card className="mb-6 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
+        <CardHeader>
+            <CardTitle className="text-lg text-yellow-800 dark:text-yellow-300">Note on Console Errors</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-yellow-700 dark:text-yellow-200 space-y-2">
+            <p>
+                You might see errors in your browser's developer console mentioning:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+                <li><code>GET /admin/advertisements 404 (Not Found)</code>: This specific path is not used. Gadget management is handled here on the "Layout Editor" page (<code>/admin/layout-editor</code>).</li>
+                 <li><code>CORS policy</code> errors related to <code>extensions.aitopia.ai</code>: These errors are likely caused by a browser extension you have installed (like Aitopia) and are not related to this application's code. They can usually be ignored or resolved by managing your browser extensions.</li>
+                <li><code>TypeError: Cannot read properties of undefined (reading 'replace')</code>: This issue related to gadget sections should now be resolved. If it persists, it might indicate corrupted gadget data in the database.</li>
+            </ul>
+        </CardContent>
+     </Card>
+  );
+
   return (
     <div className="container mx-auto py-8">
+      {errorExplanation}
+
       <Card className="shadow-lg rounded-xl mb-6">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
