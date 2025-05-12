@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import type { Advertisement, AdPlacement, AdType } from "@/lib/types";
 
-const adPlacements: AdPlacement[] = ['homepage-top', 'article-top', 'article-bottom']; // Add more as needed
+const adPlacements: AdPlacement[] = ['homepage-top', 'article-top', 'article-bottom', 'article-inline', 'popup', 'native']; // Added more placement options
 const adTypes: AdType[] = ['custom', 'external'];
 
 // Base schema
@@ -108,6 +108,12 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
     onSubmit(finalData);
   };
 
+  // Helper function to format placement names
+  const formatPlacementName = (place: string) => {
+    if (typeof place !== 'string') return ''; // Safety check
+    return place.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
@@ -127,7 +133,7 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
                 <SelectContent>
                   {adPlacements.map((place) => (
                     <SelectItem key={place} value={place}>
-                      {place.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())} {/* Basic formatting */}
+                      {formatPlacementName(place)} {/* Use helper function */}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -263,3 +269,4 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
     </Form>
   );
 }
+
