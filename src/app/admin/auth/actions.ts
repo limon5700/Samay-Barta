@@ -3,10 +3,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-export const SESSION_COOKIE_NAME = "admin-auth-token";
 
 if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
   console.warn(
