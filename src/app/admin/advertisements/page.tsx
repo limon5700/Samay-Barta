@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -32,6 +31,7 @@ import {
   deleteAdvertisement,
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
+import { formatPlacementName } from "@/lib/utils"; // Import the utility function
 
 export default function AdvertisementsPage() {
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -50,10 +50,12 @@ export default function AdvertisementsPage() {
     setIsLoading(true);
     try {
       const fetchedAds = await getAllAdvertisements();
-      setAds(fetchedAds.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
+      // Ensure fetchedAds is an array before sorting and setting
+      const safeAds = Array.isArray(fetchedAds) ? fetchedAds : [];
+      setAds(safeAds.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch advertisements.", variant: "destructive" });
-      setAds([]);
+      setAds([]); // Set to empty array on error
     } finally {
       setIsLoading(false);
     }
@@ -158,6 +160,23 @@ export default function AdvertisementsPage() {
     );
   }
 
+  // Ensure 'ads' is an array before trying to render the table
+  if (!Array.isArray(ads)) {
+    return (
+      <div className="container mx-auto py-8">
+        <Card className="shadow-lg rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-primary">Manage Advertisements</CardTitle>
+            <CardDescription>Error loading advertisements.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-center text-destructive py-10">Could not load advertisements data.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg rounded-xl">
@@ -210,7 +229,7 @@ export default function AdvertisementsPage() {
                         {ad.adType}
                       </Badge>
                     </TableCell>
-                    <TableCell className="capitalize">{ad.placement.replace('-', ' ')}</TableCell>
+                    <TableCell className="capitalize">{formatPlacementName(ad.placement)}</TableCell> {/* Use safe formatter */}
                     <TableCell>
                       {ad.adType === 'custom' && ad.linkUrl ? (
                         <a href={ad.linkUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs">

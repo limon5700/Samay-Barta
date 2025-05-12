@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as z from "zod";
@@ -25,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Advertisement, AdPlacement, AdType } from "@/lib/types";
+import { formatPlacementName } from "@/lib/utils"; // Import the utility function
 
 const adPlacements: AdPlacement[] = ['homepage-top', 'article-top', 'article-bottom', 'article-inline', 'popup', 'native']; // Added more placement options
 const adTypes: AdType[] = ['custom', 'external'];
@@ -108,21 +108,6 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
     onSubmit(finalData);
   };
 
-  // Helper function to format placement names
-  const formatPlacementName = (place: string): string => {
-     // Extra safety checks: ensure 'place' is a non-empty string before calling replace
-    if (typeof place !== 'string' || !place) {
-      console.warn("formatPlacementName received invalid input:", place);
-      return ''; 
-    }
-    try {
-      return place.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
-    } catch (error) {
-        console.error("Error in formatPlacementName with input:", place, error);
-        return place; // Return original value on error
-    }
-  };
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
@@ -142,7 +127,7 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
                 <SelectContent>
                   {adPlacements.map((place) => (
                     <SelectItem key={place} value={place}>
-                      {formatPlacementName(place)} {/* Use helper function */}
+                      {formatPlacementName(place)} {/* Use utility function */}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -279,6 +264,8 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
   );
 }
 
-// Note: The CORS errors related to 'extensions.aitopia.ai' are likely caused by a browser extension you have installed (possibly named Aitopia or similar). 
-// These errors are not originating from the Samay Barta Lite application code itself. 
-// To resolve these CORS errors, you may need to disable or configure the problematic browser extension.
+// Note: The CORS errors related to 'extensions.aitopia.ai' seen in the browser console are likely caused by a browser extension 
+// (possibly named Aitopia or similar) installed in your browser. 
+// These errors are NOT originating from the Samay Barta Lite application code itself and do not affect its functionality.
+// The extension is trying to make requests to its own server, which are failing.
+// To resolve these specific CORS errors, you may need to disable or reconfigure the problematic browser extension.
