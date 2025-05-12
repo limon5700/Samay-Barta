@@ -29,22 +29,13 @@ import { formatSectionName } from "@/lib/utils";
 
 // Define available layout sections for the dropdown
 // This could potentially be fetched dynamically in the future
-const availableSections: LayoutSection[] = [
-    'homepage-top',
-    'article-top',
-    'article-bottom',
-    'sidebar-left',
-    'sidebar-right',
-    'footer',
-    'article-inline',
-    'header-logo-area',
-    'below-header',
-];
+// Removed the hardcoded list, will use the prop instead.
 
 const gadgetFormSchema = z.object({
-  section: z.enum(availableSections as [LayoutSection, ...LayoutSection[]], {
-       required_error: "Please select a layout section."
-    }),
+  section: z.custom<LayoutSection>( // Use custom validation to check against availableSections prop later
+        (val) => typeof val === 'string' && val.length > 0,
+        { message: "Please select a valid layout section." }
+      ),
   title: z.string().max(100).optional().or(z.literal('')), // Optional title
   content: z.string().min(10, { message: "Gadget content (HTML/JS) must be at least 10 characters." }),
   isActive: z.boolean().default(true),
@@ -63,9 +54,14 @@ interface GadgetFormProps {
 
 export default function GadgetForm({ gadget, onSubmit, onCancel, isSubmitting, availableSections: sections }: GadgetFormProps) {
   const form = useForm<GadgetFormData>({
-    resolver: zodResolver(gadgetFormSchema),
+    // Add refine to validate section against the availableSections prop
+    resolver: zodResolver(gadgetFormSchema.refine(data => sections.includes(data.section), {
+      message: "Invalid layout section selected.",
+      path: ["section"], // Specify the path of the error
+    })),
     defaultValues: {
-      section: gadget?.section || sections[0],
+      // Ensure default section is valid or fall back to the first available section
+      section: gadget?.section && sections.includes(gadget.section) ? gadget.section : sections[0],
       title: gadget?.title || "",
       content: gadget?.content || "",
       isActive: gadget?.isActive === undefined ? true : gadget.isActive,
