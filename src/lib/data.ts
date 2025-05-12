@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { NewsArticle, Advertisement, CreateAdvertisementData, AdPlacement, Category } from './types';
+import type { NewsArticle, Advertisement, CreateAdvertisementData, AdPlacement, Category, CreateNewsArticleData } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
 import { initialSampleNewsArticles } from './constants'; // Keep for potential seeding
 
@@ -18,6 +18,7 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     publishedDate: doc.publishedDate instanceof Date ? doc.publishedDate.toISOString() : doc.publishedDate,
     imageUrl: doc.imageUrl,
     dataAiHint: doc.dataAiHint,
+    inlineAdSnippets: doc.inlineAdSnippets || [], // Ensure it's an array
   };
 }
 
@@ -28,6 +29,7 @@ function mapMongoDocumentToAdvertisement(doc: any): Advertisement {
     id: doc._id.toHexString(),
     placement: doc.placement,
     adType: doc.adType,
+    articleId: doc.articleId, // Add articleId mapping
     imageUrl: doc.imageUrl,
     linkUrl: doc.linkUrl,
     altText: doc.altText,
@@ -49,6 +51,7 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
         const articlesToSeed = initialSampleNewsArticles.map(article => ({
             ...article,
             publishedDate: new Date(article.publishedDate), // Convert string date to Date object
+            inlineAdSnippets: article.inlineAdSnippets || [],
             id: undefined, // Remove the temporary string ID
             _id: new ObjectId(), // Generate a new ObjectId
         }));
@@ -65,8 +68,7 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
   }
 }
 
-
-export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'>;
+// --- News Article CRUD ---
 
 export async function addNewsArticle(articleData: CreateNewsArticleData): Promise<NewsArticle | null> {
   try {
@@ -74,13 +76,12 @@ export async function addNewsArticle(articleData: CreateNewsArticleData): Promis
     const newArticleDocument = {
       ...articleData,
       publishedDate: new Date(), // Set publish date on creation
+      inlineAdSnippets: articleData.inlineAdSnippets || [], // Ensure array exists
       _id: new ObjectId(), // Explicitly generate ID here if needed, or let MongoDB handle it
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
-    
-    // Check if acknowledged and use the correct ID reference
+
     if (result.acknowledged && newArticleDocument._id) {
-      // Fetch the inserted document using the generated _id
       const insertedDoc = await db.collection('articles').findOne({ _id: newArticleDocument._id });
       return mapMongoDocumentToNewsArticle(insertedDoc);
     }
@@ -105,6 +106,13 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     // Ensure publishedDate is not accidentally updated here unless explicitly needed
     const updateDoc: any = { ...updates };
     delete updateDoc.publishedDate; // Prevent accidental overwrite of original publish date
+    if (updateDoc.inlineAdSnippets === undefined) {
+        delete updateDoc.inlineAdSnippets; // Don't set to null if not provided
+    } else if (!Array.isArray(updateDoc.inlineAdSnippets)) {
+        // Basic validation if needed, ensure it's an array
+        updateDoc.inlineAdSnippets = [];
+    }
+
 
     const result = await db.collection('articles').findOneAndUpdate(
       { _id: objectId },
@@ -151,15 +159,23 @@ export async function getArticleById(id: string): Promise<NewsArticle | null> {
   }
 }
 
-// Advertisement CRUD operations
+// --- Advertisement CRUD ---
+
 export async function addAdvertisement(adData: CreateAdvertisementData): Promise<Advertisement | null> {
   try {
     const { db } = await connectToDatabase();
     const newAdDocument = {
       ...adData,
+      // Ensure articleId is only set if provided and valid, otherwise omit it
+      articleId: adData.articleId && ObjectId.isValid(adData.articleId) ? adData.articleId : undefined,
       createdAt: new Date(),
       _id: new ObjectId(),
     };
+    // Remove articleId field if it's undefined to avoid storing null
+    if (newAdDocument.articleId === undefined) {
+        delete newAdDocument.articleId;
+    }
+
     const result = await db.collection('advertisements').insertOne(newAdDocument);
      if (result.acknowledged && newAdDocument._id) {
       const insertedDoc = await db.collection('advertisements').findOne({ _id: newAdDocument._id });
@@ -185,18 +201,34 @@ export async function getAllAdvertisements(): Promise<Advertisement[]> {
   }
 }
 
-// Function to get active ads for a specific placement
-export async function getAdsByPlacement(placement: AdPlacement): Promise<Advertisement[]> {
+// Function to get *all* active ads for a specific placement, optionally filtered by articleId.
+// Returns an array of ads. The calling page component will handle selection/rotation.
+export async function getAdsByPlacement(placement: AdPlacement, articleId?: string): Promise<Advertisement[]> {
   try {
     const { db } = await connectToDatabase();
-    const adsCursor = db.collection('advertisements').find({ 
-        placement: placement, 
-        isActive: true 
-    }).sort({ createdAt: -1 }); // Sort or maybe randomize?
-    const adsArray = await adsCursor.toArray();
-    return adsArray.map(mapMongoDocumentToAdvertisement);
+    let query: any = { placement: placement, isActive: true };
+
+    // If articleId is provided, first try to find article-specific ads
+    if (articleId && ObjectId.isValid(articleId)) {
+      const articleSpecificQuery = { ...query, articleId: articleId };
+      const articleSpecificAds = await db.collection('advertisements').find(articleSpecificQuery).sort({ createdAt: -1 }).toArray();
+
+      if (articleSpecificAds.length > 0) {
+        // console.log(`Found ${articleSpecificAds.length} article-specific ads for ${articleId} placement ${placement}`);
+        return articleSpecificAds.map(mapMongoDocumentToAdvertisement);
+      }
+       // console.log(`No article-specific ads found for ${articleId}, placement ${placement}. Falling back to global.`);
+    }
+
+    // Fallback: Find global ads (no articleId set) for the placement
+    query.articleId = { $exists: false };
+    const globalAdsCursor = db.collection('advertisements').find(query).sort({ createdAt: -1 });
+    const globalAdsArray = await globalAdsCursor.toArray();
+    // console.log(`Found ${globalAdsArray.length} global ads for placement ${placement}`);
+    return globalAdsArray.map(mapMongoDocumentToAdvertisement);
+
   } catch (error) {
-    console.error(`Error fetching ads for placement ${placement}:`, error);
+    console.error(`Error fetching ads for placement ${placement}${articleId ? ` (article: ${articleId})` : ''}:`, error);
     return [];
   }
 }
@@ -210,10 +242,36 @@ export async function updateAdvertisement(id: string, updates: Partial<Omit<Adve
   try {
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
-    
-    // Ensure createdAt is not accidentally updated
+
     const updateDoc: any = { ...updates };
-    delete updateDoc.createdAt; 
+    delete updateDoc.createdAt;
+
+    // Handle articleId: allow setting it, or unsetting it by passing null/undefined/empty string
+    if (updates.articleId && ObjectId.isValid(updates.articleId)) {
+      updateDoc.articleId = updates.articleId;
+    } else {
+      // If articleId is explicitly provided as null/undefined/empty, remove it
+      if (updates.hasOwnProperty('articleId') && !updates.articleId) {
+         // We need to use $unset to remove the field completely
+         const { $set, $unset = {} } = { $set: {}, $unset: {} };
+         for (const key in updateDoc) {
+             if (key !== 'articleId') {
+                 $set[key] = updateDoc[key];
+             }
+         }
+         $unset['articleId'] = ""; // $unset requires a value, empty string works
+
+          const result = await db.collection('advertisements').findOneAndUpdate(
+              { _id: objectId },
+              { $set, $unset },
+              { returnDocument: 'after' }
+          );
+          return result ? mapMongoDocumentToAdvertisement(result) : null;
+      }
+      // If articleId wasn't in the updates object, don't change it
+      delete updateDoc.articleId;
+
+    }
 
     const result = await db.collection('advertisements').findOneAndUpdate(
       { _id: objectId },

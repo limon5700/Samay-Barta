@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as z from "zod";
@@ -25,14 +26,30 @@ import {
 } from "@/components/ui/select";
 import type { Advertisement, AdPlacement, AdType } from "@/lib/types";
 import { formatPlacementName } from "@/lib/utils"; // Import the utility function
+import { ObjectId } from "mongodb"; // Import ObjectId for validation
 
-const adPlacements: AdPlacement[] = ['homepage-top', 'article-top', 'article-bottom', 'article-inline', 'popup', 'native']; // Added more placement options
+// Update adPlacements with new options
+const adPlacements: AdPlacement[] = [
+    'homepage-top',
+    'article-top',
+    'article-bottom',
+    'sidebar-left',
+    'sidebar-right',
+    'footer',
+    'article-inline' // Keep this generic for now, specific slot logic handled elsewhere
+];
 const adTypes: AdType[] = ['custom', 'external'];
 
 // Base schema
 const baseAdFormSchema = z.object({
   placement: z.enum(adPlacements as [AdPlacement, ...AdPlacement[]], { required_error: "Please select an ad placement." }),
   adType: z.enum(adTypes as [AdType, ...AdType[]], { required_error: "Please select an ad type." }),
+  articleId: z.string()
+      .optional()
+      .refine(val => !val || ObjectId.isValid(val), { // Validate if provided
+          message: "Invalid Article ID format.",
+      })
+      .or(z.literal('')), // Allow empty string
   altText: z.string().max(100, { message: "Alt text cannot exceed 100 characters." }).optional().or(z.literal('')),
   isActive: z.boolean().default(true),
   // Fields made optional here, refinement below enforces requirements
@@ -63,7 +80,7 @@ const adFormSchema = baseAdFormSchema.superRefine((data, ctx) => {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['codeSnippet'],
-        message: "A valid code snippet is required for external ads.",
+        message: "A valid code snippet is required for external ads (min 10 chars).",
       });
     }
   }
@@ -85,6 +102,7 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
     defaultValues: {
       placement: advertisement?.placement || adPlacements[0],
       adType: advertisement?.adType || adTypes[0],
+      articleId: advertisement?.articleId || "", // Initialize articleId
       imageUrl: advertisement?.imageUrl || "",
       linkUrl: advertisement?.linkUrl || "",
       altText: advertisement?.altText || "",
@@ -105,6 +123,13 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
       finalData.linkUrl = '';
       finalData.altText = ''; // Alt text is for images
     }
+
+    // Ensure articleId is either a valid ObjectId string or undefined
+    finalData.articleId = finalData.articleId && ObjectId.isValid(finalData.articleId)
+        ? finalData.articleId
+        : undefined;
+
+
     onSubmit(finalData);
   };
 
@@ -140,6 +165,23 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
 
         <FormField
           control={form.control}
+          name="articleId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Assign to Specific Article (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter Article ID (leave blank for global placement)" {...field} />
+              </FormControl>
+              <FormDescription>
+                If filled, this ad will only show on the specified article for the selected placement, overriding global ads.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
           name="adType"
           render={({ field }) => (
             <FormItem>
@@ -153,12 +195,12 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
                 <SelectContent>
                   {adTypes.map((type) => (
                     <SelectItem key={type} value={type}>
-                      {type === 'custom' ? 'Custom Image Ad' : 'External Code Snippet'}
+                      {type === 'custom' ? 'Custom Image Ad' : 'External Code Snippet (AdSense, etc.)'}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Select if this is a custom image/link ad or an external script (e.g., AdSense).</FormDescription>
+              <FormDescription>Select if this is a custom image/link ad or an external script.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -219,7 +261,7 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
             name="codeSnippet"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Code Snippet</FormLabel>
+                <FormLabel>Code Snippet (HTML/JS)</FormLabel>
                 <FormControl>
                   <Textarea placeholder="Paste ad code snippet here (e.g., AdSense code)" {...field} rows={6} />
                 </FormControl>
@@ -264,8 +306,10 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
   );
 }
 
-// Note: The CORS errors related to 'extensions.aitopia.ai' seen in the browser console are likely caused by a browser extension 
-// (possibly named Aitopia or similar) installed in your browser. 
+// Note: The CORS errors related to 'extensions.aitopia.ai' seen in the browser console are likely caused by a browser extension
+// (possibly named Aitopia or similar) installed in your browser.
 // These errors are NOT originating from the Samay Barta Lite application code itself and do not affect its functionality.
 // The extension is trying to make requests to its own server, which are failing.
 // To resolve these specific CORS errors, you may need to disable or reconfigure the problematic browser extension.
+
+// Type error for replace() is likely due to the input to formatPlacementName sometimes not being a string, added safety checks in lib/utils.ts
