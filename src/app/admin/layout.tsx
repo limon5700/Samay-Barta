@@ -2,27 +2,24 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut } from 'lucide-react';
-import { logoutAction, getSession } from '@/app/admin/auth/actions'; // Updated path
+import { Home, Newspaper, LogOut, Megaphone } from 'lucide-react';
+import { logoutAction, getSession } from '@/app/admin/auth/actions'; 
 import { redirect } from 'next/navigation';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
 
-  // This check is primarily for server-side rendering.
-  // Middleware should handle the actual redirection for client-side navigation.
-  // However, if middleware somehow fails or if this layout is accessed directly
-  // without going through middleware (less common for pages), this provides a fallback.
-  if (!session?.isAuthenticated) {
-    // It's generally better to let middleware handle redirects.
-    // If this layout is for pages that are *always* protected,
-    // then a redirect here makes sense if middleware isn't solely relied upon.
-    // For now, we assume middleware handles the primary protection.
-    // If middleware is correctly configured, this layout won't be rendered for unauth users on protected paths.
-    // Consider if /admin/login should also use this layout or a simpler one.
-    // If /admin/login uses this layout, we must not redirect from here.
-    // The current setup means /admin/login does NOT use this layout, which is fine.
+  if (!session?.isAuthenticated && typeof window !== 'undefined') {
+    // This check should ideally be handled by middleware for client-side navigation
+    // For direct access or SSR fallback where middleware might not have run (less common for pages),
+    // redirect if not on the login page itself.
+    // Note: `usePathname` can't be used in server components, so direct string check or middleware is key.
+    // The middleware already handles this, but this is an additional layer for direct nav.
+    // The middleware already handles this, but this is an additional layer for direct nav.
+    // redirect('/admin/login'); // This might cause issues if current page IS login page or during build.
+    // Middleware handles this better.
   }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -31,7 +28,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           Samay Barta Lite - Admin
         </Link>
         {session?.isAuthenticated && (
-          <nav className="ml-auto flex items-center gap-2">
+          <nav className="ml-auto flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" asChild>
               <Link href="/">
                 <Home className="h-4 w-4 mr-2" />
@@ -42,6 +39,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <Link href="/admin/dashboard">
                 <Newspaper className="h-4 w-4 mr-2" />
                 Manage Articles
+              </Link>
+            </Button>
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/admin/advertisements">
+                <Megaphone className="h-4 w-4 mr-2" />
+                Manage Ads
               </Link>
             </Button>
             <form action={logoutAction}>

@@ -11,3 +11,14 @@ export interface NewsArticle {
 }
 
 export type Category = "Technology" | "Sports" | "Business" | "World" | "Entertainment" | string; // Allow string for flexibility if categories are dynamic
+
+export interface Advertisement {
+  id: string; // MongoDB's _id.toHexString()
+  imageUrl: string;
+  linkUrl: string;
+  altText?: string;
+  isActive: boolean;
+  createdAt?: string; // ISO string format
+}
+
+export type CreateAdvertisementData = Omit<Advertisement, 'id' | 'createdAt'>;

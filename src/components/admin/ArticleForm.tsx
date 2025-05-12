@@ -1,6 +1,7 @@
 
 "use client";
 
+import type { ChangeEvent } from "react";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,13 +26,14 @@ import {
 } from "@/components/ui/select";
 import type { NewsArticle, Category } from "@/lib/types";
 import { categories as allNewsCategories } from "@/lib/constants";
+import { useToast } from "@/hooks/use-toast";
 
 const articleFormSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters." }).max(150),
   content: z.string().min(20, { message: "Content must be at least 20 characters." }),
   excerpt: z.string().min(10, { message: "Excerpt must be at least 10 characters." }).max(300),
   category: z.string().refine(val => allNewsCategories.includes(val as Category) || val === "", { message: "Please select a valid category."}),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  imageUrl: z.string().optional().or(z.literal('')), // Allow Data URLs or regular URLs
   dataAiHint: z.string().max(50).optional().or(z.literal('')),
 });
 
@@ -45,6 +47,7 @@ interface ArticleFormProps {
 }
 
 export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: ArticleFormProps) {
+  const { toast } = useToast();
   const form = useForm<ArticleFormData>({
     resolver: zodResolver(articleFormSchema),
     defaultValues: {
@@ -56,6 +59,37 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
       dataAiHint: article?.dataAiHint || "",
     },
   });
+
+  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit for Data URL
+        toast({
+          title: "Error",
+          description: "Image size should not exceed 5MB for direct upload.",
+          variant: "destructive",
+        });
+        event.target.value = ""; // Reset file input
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        form.setValue("imageUrl", reader.result as string);
+        toast({
+          title: "Image Selected",
+          description: "Image ready to be saved with the article.",
+        });
+      };
+      reader.onerror = () => {
+        toast({
+          title: "Error",
+          description: "Failed to read the image file.",
+          variant: "destructive",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = (data: ArticleFormData) => {
     onSubmit(data);
@@ -130,18 +164,33 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
             </FormItem>
           )}
         />
+        
+        <FormItem>
+          <FormLabel>Upload Image (Optional)</FormLabel>
+          <FormControl>
+            <Input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleImageUpload} 
+              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+            />
+          </FormControl>
+          <FormDescription>
+            Alternatively, you can paste an image URL below. Uploaded image (max 5MB) will populate the URL field.
+          </FormDescription>
+        </FormItem>
 
         <FormField
           control={form.control}
           name="imageUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Image URL (Optional)</FormLabel>
+              <FormLabel>Image URL (or from upload)</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com/image.jpg" {...field} />
+                <Input placeholder="https://example.com/image.jpg or will be auto-filled by upload" {...field} />
               </FormControl>
               <FormDescription>
-                Use services like Picsum Photos (e.g., https://picsum.photos/seed/example/400/200)
+                 This field will be auto-filled if you upload an image. Otherwise, paste an external URL.
               </FormDescription>
               <FormMessage />
             </FormItem>
