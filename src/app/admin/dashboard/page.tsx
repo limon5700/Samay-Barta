@@ -22,14 +22,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm";
-import type { NewsArticle } from "@/lib/types";
+import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm"; // Correct import
+import type { NewsArticle, CreateNewsArticleData } from "@/lib/types"; // Import CreateNewsArticleData
 import {
   getAllNewsArticles,
   addNewsArticle,
   updateNewsArticle,
   deleteNewsArticle,
-  CreateNewsArticleData
+  // Remove CreateNewsArticleData from here if it's only a type
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,7 +50,9 @@ export default function DashboardPage() {
     setIsLoading(true);
     try {
       const fetchedArticles = await getAllNewsArticles();
-      setArticles(fetchedArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
+      // Ensure fetchedArticles is an array before sorting
+      const safeArticles = Array.isArray(fetchedArticles) ? fetchedArticles : [];
+      setArticles(safeArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch articles.", variant: "destructive" });
       setArticles([]); // Set to empty array on error
@@ -90,7 +92,9 @@ export default function DashboardPage() {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
       }
     } catch (error) {
-      toast({ title: "Error", description: "An error occurred while deleting the article.", variant: "destructive" });
+       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+       console.error("Error deleting article:", error);
+       toast({ title: "Error", description: `An error occurred while deleting the article: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
       setIsDeleteDialogOpen(false);
@@ -102,14 +106,32 @@ export default function DashboardPage() {
     setIsSubmitting(true);
     try {
       if (editingArticle) {
-        const result = await updateNewsArticle(editingArticle.id, data as Partial<Omit<NewsArticle, 'id' | 'publishedDate'>>);
+         // Prepare data for update, excluding id and publishedDate
+         const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = {
+            title: data.title,
+            content: data.content,
+            excerpt: data.excerpt,
+            category: data.category,
+            imageUrl: data.imageUrl,
+            dataAiHint: data.dataAiHint,
+         };
+        const result = await updateNewsArticle(editingArticle.id, updateData);
         if (result) {
           toast({ title: "Success", description: "Article updated successfully." });
         } else {
            toast({ title: "Error", description: "Failed to update article.", variant: "destructive" });
         }
       } else {
-        const result = await addNewsArticle(data as CreateNewsArticleData);
+         // Prepare data for creation matching CreateNewsArticleData type
+         const createData: CreateNewsArticleData = {
+            title: data.title,
+            content: data.content,
+            excerpt: data.excerpt,
+            category: data.category,
+            imageUrl: data.imageUrl,
+            dataAiHint: data.dataAiHint,
+         };
+        const result = await addNewsArticle(createData);
          if (result) {
             toast({ title: "Success", description: "Article added successfully." });
         } else {
@@ -120,7 +142,9 @@ export default function DashboardPage() {
       setIsAddEditDialogOpen(false);
       setEditingArticle(null);
     } catch (error) {
-      toast({ title: "Error", description: "An error occurred while saving the article.", variant: "destructive" });
+       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+       console.error("Error saving article:", error);
+       toast({ title: "Error", description: `An error occurred while saving the article: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -201,15 +225,18 @@ export default function DashboardPage() {
               {editingArticle ? "Modify the details of the existing article." : "Fill in the details to create a new news article."}
             </DialogDescription>
           </DialogHeader>
-          <ArticleForm
-            article={editingArticle}
-            onSubmit={handleFormSubmit}
-            onCancel={() => {
-                setIsAddEditDialogOpen(false);
-                setEditingArticle(null);
-            }}
-            isSubmitting={isSubmitting}
-          />
+          {/* Render ArticleForm only when dialog is open to ensure correct default values */}
+          {isAddEditDialogOpen && (
+            <ArticleForm
+              article={editingArticle} // Pass the article to edit or null for new
+              onSubmit={handleFormSubmit}
+              onCancel={() => {
+                  setIsAddEditDialogOpen(false);
+                  setEditingArticle(null);
+              }}
+              isSubmitting={isSubmitting}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

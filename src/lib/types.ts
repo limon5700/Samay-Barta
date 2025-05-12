@@ -12,11 +12,24 @@ export interface NewsArticle {
 
 export type Category = "Technology" | "Sports" | "Business" | "World" | "Entertainment" | string; // Allow string for flexibility if categories are dynamic
 
+export type AdPlacement = 
+  | 'homepage-top' 
+  | 'article-top' 
+  | 'article-bottom'
+  | 'article-inline' // Placeholder for future, complex implementation
+  | 'popup' // Placeholder for future, complex implementation
+  | 'native'; // Placeholder for future, complex implementation
+
+export type AdType = 'custom' | 'external'; // 'custom' for image/link, 'external' for code snippet
+
 export interface Advertisement {
   id: string; // MongoDB's _id.toHexString()
-  imageUrl: string;
-  linkUrl: string;
+  placement: AdPlacement;
+  adType: AdType;
+  imageUrl?: string; // Required if adType is 'custom'
+  linkUrl?: string; // Required if adType is 'custom'
   altText?: string;
+  codeSnippet?: string; // Required if adType is 'external'
   isActive: boolean;
   createdAt?: string; // ISO string format
 }

@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { NewsArticle, Category, Advertisement } from '@/lib/types';
-import { getAllNewsArticles, getAllAdvertisements } from '@/lib/data';
+import { getAllNewsArticles, getAdsByPlacement } from '@/lib/data'; // Updated data import
 import { categories as allNewsCategories } from '@/lib/constants';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
+  const [homepageTopAds, setHomepageTopAds] = useState<Advertisement[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -28,17 +28,18 @@ export default function HomePage() {
       if (!isClient) return; 
       setIsPageLoading(true);
       try {
-        const [fetchedArticles, fetchedAds] = await Promise.all([
+        // Fetch articles and ads concurrently
+        const [fetchedArticles, fetchedTopAds] = await Promise.all([
           getAllNewsArticles(),
-          getAllAdvertisements()
+          getAdsByPlacement('homepage-top') // Fetch ads for the top placement
         ]);
         setArticles(fetchedArticles);
-        setAdvertisements(fetchedAds.filter(ad => ad.isActive));
+        setHomepageTopAds(fetchedTopAds); // Store fetched top ads
       } catch (error) {
         console.error("Failed to fetch data:", error);
         toast({ title: "Error", description: "Failed to load page content.", variant: "destructive" });
         setArticles([]); 
-        setAdvertisements([]);
+        setHomepageTopAds([]); // Set ads to empty on error
       } finally {
         setIsPageLoading(false);
       }
@@ -48,15 +49,17 @@ export default function HomePage() {
   }, [isClient, toast]);
 
   const filteredArticles = useMemo(() => {
-    return articles
+    // Ensure articles is always an array before filtering
+    const safeArticles = Array.isArray(articles) ? articles : [];
+    return safeArticles
       .filter(article =>
         selectedCategory === 'All' || article.category === selectedCategory
       )
       .filter(article =>
         article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (article.excerpt && article.excerpt.toLowerCase().includes(searchTerm.toLowerCase())) || // Check if excerpt exists
         (typeof article.category === 'string' && article.category.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
+      );
   }, [articles, searchTerm, selectedCategory]);
 
   const handleSearch = useCallback((term: string) => {
@@ -90,7 +93,8 @@ export default function HomePage() {
     </div>
   );
 
-  const firstActiveAd = useMemo(() => advertisements.find(ad => ad.isActive), [advertisements]);
+  // Select the first active ad for the top placement
+  const topAdToDisplay = useMemo(() => homepageTopAds.find(ad => ad.isActive), [homepageTopAds]);
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
@@ -100,7 +104,9 @@ export default function HomePage() {
           <PageSkeleton />
         ) : (
           <div className="container mx-auto px-4 py-8">
-            {firstActiveAd && <AdDisplay ad={firstActiveAd} />}
+            {/* Display the top ad if available */}
+            {topAdToDisplay && <AdDisplay ad={topAdToDisplay} className="mb-6" />} 
+            
             <CategoryFilter
               categories={allNewsCategories}
               selectedCategory={selectedCategory}
@@ -113,6 +119,7 @@ export default function HomePage() {
                 {getUIText("noArticlesFound")}
               </p>
             )}
+            {/* Consider adding another AdDisplay here for a bottom placement */}
           </div>
         )}
       </main>

@@ -7,11 +7,12 @@ import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
-import type { NewsArticle } from '@/lib/types';
-import { getArticleById } from '@/lib/data'; // Updated data source
+import type { NewsArticle, Advertisement } from '@/lib/types'; // Import Advertisement type
+import { getArticleById, getAdsByPlacement } from '@/lib/data'; // Import getAdsByPlacement
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import AdDisplay from '@/components/ads/AdDisplay'; // Import AdDisplay component
 import { translateText } from '@/ai/flows/translate-text-flow';
 import { useToast } from "@/hooks/use-toast";
 import Header from '@/components/layout/Header';
@@ -27,6 +28,8 @@ export default function ArticlePage() {
   const id = params.id as string;
 
   const [article, setArticle] = useState<NewsArticle | null>(null);
+  const [articleTopAds, setArticleTopAds] = useState<Advertisement[]>([]);
+  const [articleBottomAds, setArticleBottomAds] = useState<Advertisement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTranslating, setIsTranslating] = useState(false);
   
@@ -36,39 +39,49 @@ export default function ArticlePage() {
   const [translationsCache, setTranslationsCache] = useState<Record<string, { title: string, content: string }>>({});
 
   useEffect(() => {
-    const fetchArticle = async () => {
+    const fetchArticleAndAds = async () => {
       if (!id || !isClient) return;
       setIsLoading(true);
       try {
-        const foundArticle = await getArticleById(id);
+        // Fetch article and ads concurrently
+        const [foundArticle, fetchedTopAds, fetchedBottomAds] = await Promise.all([
+          getArticleById(id),
+          getAdsByPlacement('article-top'),
+          getAdsByPlacement('article-bottom')
+        ]);
+
         if (foundArticle) {
           setArticle(foundArticle);
+          setArticleTopAds(fetchedTopAds);
+          setArticleBottomAds(fetchedBottomAds);
           // Initial display will be set by translation useEffect
         } else {
           toast({ title: getUIText("error") || "Error", description: getUIText("articleNotFound"), variant: "destructive" });
           // router.push('/'); // Consider if redirect is always desired
         }
       } catch (error) {
-        console.error("Failed to fetch article:", error);
-        toast({ title: getUIText("error") || "Error", description: "Failed to load article details.", variant: "destructive" });
+        console.error("Failed to fetch article or ads:", error);
+        toast({ title: getUIText("error") || "Error", description: "Failed to load article details or ads.", variant: "destructive" });
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchArticle();
+    fetchArticleAndAds();
   }, [id, isClient, toast, getUIText, router]);
 
 
   const performTranslation = useCallback(async () => {
     if (!article || !language || !isClient) return;
 
-    if (language === 'en') { // Assuming 'en' is the original language of the article content
+    // Skip translation if target is English (assuming English is base)
+    if (language === 'en') { 
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
       return;
     }
 
+    // Use cache if available
     if (translationsCache[language]) {
       setDisplayTitle(translationsCache[language].title);
       setDisplayContent(translationsCache[language].content);
@@ -88,6 +101,7 @@ export default function ArticlePage() {
       setDisplayTitle(newTitle);
       setDisplayContent(newContent);
       
+      // Update cache
       setTranslationsCache(prev => ({ ...prev, [language]: { title: newTitle, content: newContent } }));
 
     } catch (error) {
@@ -97,6 +111,7 @@ export default function ArticlePage() {
         description: getUIText("couldNotTranslateArticle"),
         variant: "destructive",
       });
+      // Fallback to original on error
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
     } finally {
@@ -115,8 +130,10 @@ export default function ArticlePage() {
   }, [article, language, isClient, performTranslation]);
 
 
+  // --- Render Logic ---
+
   if (!isClient && !id) { 
-     // Minimal SSR if no ID yet (should be rare if routing is correct)
+     // Minimal SSR if no ID yet
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
@@ -133,13 +150,14 @@ export default function ArticlePage() {
     );
   }
 
-
-  if (isLoading) { // Covers initial client load and loading article data
+  if (isLoading) { // Loading state skeleton
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <Header onSearch={(term) => router.push(`/?search=${term}`)} />
         <main className="flex-grow container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-24 mb-6 rounded-md" />
+          {/* Top Ad Skeleton */}
+          <Skeleton className="h-20 w-full mb-6 rounded-md" /> 
           <Card className="shadow-lg">
             <CardHeader>
               <Skeleton className="h-10 w-3/4 mb-2 rounded-md" />
@@ -155,13 +173,15 @@ export default function ArticlePage() {
               <Skeleton className="h-6 w-5/6 mb-2 rounded-md" />
             </CardContent>
           </Card>
+          {/* Bottom Ad Skeleton */}
+          <Skeleton className="h-20 w-full mt-6 rounded-md" /> 
         </main>
         <Footer />
       </div>
     );
   }
 
-  if (!article && !isLoading) { // Article fetch finished, but not found
+  if (!article && !isLoading) { // Article not found state
     return (
        <div className="flex flex-col min-h-screen bg-background">
         <Header onSearch={(term) => router.push(`/?search=${term}`)} />
@@ -173,11 +193,14 @@ export default function ArticlePage() {
     );
   }
   
-  // This check is mostly for TypeScript to be happy, as article should exist by now
+  // Ensure article exists for rendering
   if (!article) return null; 
 
-
   const formattedDate = article.publishedDate ? format(parseISO(article.publishedDate), "MMMM d, yyyy 'at' h:mm a") : "N/A";
+
+  // Select the first active ad for each placement
+  const topAdToDisplay = articleTopAds.find(ad => ad.isActive);
+  const bottomAdToDisplay = articleBottomAds.find(ad => ad.isActive);
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -187,6 +210,9 @@ export default function ArticlePage() {
           <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
           {getUIText("backToNews")}
         </Button>
+
+        {/* Top Ad Placement */}
+        {topAdToDisplay && <AdDisplay ad={topAdToDisplay} className="mb-6" />}
 
         <Card className="shadow-xl rounded-xl overflow-hidden">
           {article.imageUrl && (
@@ -222,8 +248,9 @@ export default function ArticlePage() {
                     <Skeleton className="h-6 w-5/6 mb-2 rounded-md" />
                 </>
             ) : (
+                 // Use 'whitespace-pre-wrap' to preserve line breaks from the content
                 <article className="prose prose-base sm:prose-lg lg:prose-xl max-w-none dark:prose-invert text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                {displayContent || article.content}
+                 {displayContent || article.content}
                 </article>
             )}
           </CardContent>
@@ -234,6 +261,10 @@ export default function ArticlePage() {
                 <span>{getUIText("translating")}</span>
             </div>
         )}
+
+        {/* Bottom Ad Placement */}
+        {bottomAdToDisplay && <AdDisplay ad={bottomAdToDisplay} className="mt-6" />}
+
       </main>
       <Footer />
     </div>
