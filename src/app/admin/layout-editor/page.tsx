@@ -239,7 +239,12 @@ export default function LayoutEditorPage() {
           <DialogHeader>
             <DialogTitle>{editingGadget ? "Edit Gadget" : "Add New Gadget"}</DialogTitle>
             <DialogDescription>
-              {editingGadget ? "Modify the gadget's content or settings." : `Add a new gadget to the "${formatSectionName(selectedSection)}" section.`}
+              {editingGadget
+                ? "Modify the gadget's content or settings."
+                : selectedSection // Check if selectedSection exists before formatting
+                  ? `Add a new gadget to the "${formatSectionName(selectedSection)}" section.`
+                  : "Add a new gadget." // Fallback description
+              }
             </DialogDescription>
           </DialogHeader>
           {/* Conditionally render form to ensure defaultValues are correctly set */}
