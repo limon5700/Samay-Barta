@@ -9,7 +9,7 @@ export default function Footer() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [footerText, setFooterText] = useState({
     reserved: "",
-    poweredBy: "appName",
+    poweredBy: "",
     appName: ""
   });
 
@@ -25,7 +25,7 @@ export default function Footer() {
       // SSR Fallback
        setFooterText({
         reserved: "All rights reserved.",
-        poweredBy: "Powered by Next.js & Generative AI",
+        poweredBy: "Powered by Samay Barta Lite",
         appName: "Samay Barta Lite"
       });
     }
