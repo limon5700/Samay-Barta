@@ -9,7 +9,7 @@ export default function Footer() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [footerText, setFooterText] = useState({
     reserved: "",
-    poweredBy: "",
+    poweredBy: "appName",
     appName: ""
   });
 
