@@ -109,9 +109,18 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
   };
 
   // Helper function to format placement names
-  const formatPlacementName = (place: string) => {
-    if (typeof place !== 'string') return ''; // Safety check
-    return place.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const formatPlacementName = (place: string): string => {
+     // Extra safety checks: ensure 'place' is a non-empty string before calling replace
+    if (typeof place !== 'string' || !place) {
+      console.warn("formatPlacementName received invalid input:", place);
+      return ''; 
+    }
+    try {
+      return place.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    } catch (error) {
+        console.error("Error in formatPlacementName with input:", place, error);
+        return place; // Return original value on error
+    }
   };
 
   return (
@@ -270,3 +279,6 @@ export default function AdvertisementForm({ advertisement, onSubmit, onCancel, i
   );
 }
 
+// Note: The CORS errors related to 'extensions.aitopia.ai' are likely caused by a browser extension you have installed (possibly named Aitopia or similar). 
+// These errors are not originating from the Samay Barta Lite application code itself. 
+// To resolve these CORS errors, you may need to disable or configure the problematic browser extension.
