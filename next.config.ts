@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -18,6 +19,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // compiler: {
+  //   // Turbopack can be enabled by removing this or setting it to 'turbopack'
+  //   // For SWC:
+  //   // styledComponents: true, // Example for styled-components, if used
+  // },
 };
 
 export default nextConfig;
