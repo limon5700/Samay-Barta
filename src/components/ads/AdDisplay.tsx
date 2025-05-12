@@ -1,79 +1,80 @@
 
 "use client";
 
-import type { Advertisement } from "@/lib/types";
-import Image from "next/image";
-import { Card } from "@/components/ui/card";
+import type { Gadget } from "@/lib/types"; // Use Gadget type
 import { useEffect, useRef } from "react";
+import { Card } from "@/components/ui/card"; // Keep Card for potential container styling
 
 interface AdDisplayProps {
-  ad: Advertisement;
+  gadget: Gadget; // Use Gadget type
   className?: string; // Optional class name for styling the container
 }
 
-export default function AdDisplay({ ad, className }: AdDisplayProps) {
+export default function AdDisplay({ gadget, className }: AdDisplayProps) {
   const adContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // This effect attempts to execute scripts within the code snippet
-    // This is generally UNSAFE if the snippet is not trusted.
-    if (ad.adType === 'external' && ad.codeSnippet && adContainerRef.current) {
+    // This effect executes scripts within the gadget content
+    // This is generally UNSAFE if the content is not trusted.
+    if (gadget.content && adContainerRef.current) {
       const container = adContainerRef.current;
-      // Clear previous content
-      container.innerHTML = ad.codeSnippet;
-      // Find and execute scripts
-      const scripts = Array.from(container.querySelectorAll("script"));
-      scripts.forEach(oldScript => {
+      // Clear previous content before inserting new
+      container.innerHTML = '';
+
+      // Create a temporary container to parse the HTML string
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = gadget.content; // Assign the gadget's HTML/JS content
+
+      // Find all script tags within the parsed content
+      const scripts = Array.from(tempDiv.querySelectorAll("script"));
+
+      // Append all nodes (including non-script elements) from tempDiv to the actual container
+      while (tempDiv.firstChild) {
+        container.appendChild(tempDiv.firstChild);
+      }
+
+
+      // Find the scripts *within the actual container* now and execute them
+      const scriptsInContainer = Array.from(container.querySelectorAll("script"));
+      scriptsInContainer.forEach(oldScript => {
         const newScript = document.createElement("script");
-        // Copy attributes
+        // Copy attributes (like src, async, defer)
         Array.from(oldScript.attributes).forEach(attr => {
           newScript.setAttribute(attr.name, attr.value);
         });
-        // Copy content
-        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-        // Replace old script with new one to trigger execution
-        oldScript.parentNode?.replaceChild(newScript, oldScript);
+        // Copy inline script content
+        if (oldScript.textContent) {
+            newScript.appendChild(document.createTextNode(oldScript.textContent));
+        }
+
+        // Replace the old script tag with the new one to trigger execution
+         if (oldScript.parentNode) {
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+         } else {
+            console.warn("Script's parentNode is null, cannot replace to execute:", oldScript);
+         }
       });
     }
-  }, [ad.adType, ad.codeSnippet]); // Rerun if type or snippet changes
+     // Cleanup function to remove content when component unmounts or gadget changes
+     return () => {
+        if (adContainerRef.current) {
+            adContainerRef.current.innerHTML = '';
+        }
+     };
+  }, [gadget.content, gadget.id]); // Rerun effect if gadget content or ID changes
 
 
-  if (!ad || !ad.isActive) {
-    return null;
+  if (!gadget || !gadget.isActive || !gadget.content) {
+    return null; // Don't render anything if gadget is inactive or has no content
   }
 
-  // Render custom image ad
-  if (ad.adType === 'custom' && ad.imageUrl && ad.linkUrl) {
-    return (
-      <Card className={`my-4 overflow-hidden shadow-md rounded-lg ${className}`}>
-        <a href={ad.linkUrl} target="_blank" rel="noopener noreferrer nofollow" aria-label={ad.altText || "Advertisement"}>
-          <div className="relative w-full aspect-[4/1] md:aspect-[5/1]"> {/* Adjust aspect ratio */}
-            <Image
-              src={ad.imageUrl}
-              alt={ad.altText || "Advertisement"}
-              fill
-              style={{ objectFit: 'cover' }}
-              priority // Consider making conditional based on placement
-              data-ai-hint="advertisement banner"
-            />
-          </div>
-        </a>
-      </Card>
-    );
-  }
-
-  // Render external code snippet ad
-  if (ad.adType === 'external' && ad.codeSnippet) {
-    return (
-      <div 
-        ref={adContainerRef}
-        className={`my-4 ad-external-snippet ${className}`} 
-        // dangerouslySetInnerHTML={{ __html: ad.codeSnippet }} // Avoid direct use if possible, use useEffect approach
-      />
-      // The useEffect hook will populate this div
-    );
-  }
-
-  // Fallback if ad type is unknown or data is missing
-  return null;
+  // Render the container div. The useEffect hook will populate this div.
+  return (
+    <div
+      ref={adContainerRef}
+      className={`gadget-container section-${gadget.section} ${className}`}
+      data-gadget-id={gadget.id}
+      // Avoid dangerouslySetInnerHTML for script execution; handled by useEffect
+    />
+  );
 }

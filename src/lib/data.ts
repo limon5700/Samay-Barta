@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { NewsArticle, Advertisement, CreateAdvertisementData, AdPlacement, Category, CreateNewsArticleData } from './types';
+import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
 import { initialSampleNewsArticles } from './constants'; // Keep for potential seeding
 
@@ -22,19 +22,16 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
   };
 }
 
-// Helper to map MongoDB document to Advertisement type
-function mapMongoDocumentToAdvertisement(doc: any): Advertisement {
+// Helper to map MongoDB document to Gadget type
+function mapMongoDocumentToGadget(doc: any): Gadget {
   if (!doc) return null as any;
   return {
     id: doc._id.toHexString(),
-    placement: doc.placement,
-    adType: doc.adType,
-    articleId: doc.articleId, // Add articleId mapping
-    imageUrl: doc.imageUrl,
-    linkUrl: doc.linkUrl,
-    altText: doc.altText,
-    codeSnippet: doc.codeSnippet,
+    section: doc.section || doc.placement, // Handle old placement field during transition
+    title: doc.title,
+    content: doc.content || doc.codeSnippet, // Handle old codeSnippet field
     isActive: doc.isActive,
+    order: doc.order,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
   };
 }
@@ -159,135 +156,123 @@ export async function getArticleById(id: string): Promise<NewsArticle | null> {
   }
 }
 
-// --- Advertisement CRUD ---
+// --- Gadget (Advertisement) CRUD ---
 
-export async function addAdvertisement(adData: CreateAdvertisementData): Promise<Advertisement | null> {
+// Renamed from addAdvertisement
+export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | null> {
   try {
     const { db } = await connectToDatabase();
-    const newAdDocument = {
-      ...adData,
-      // Ensure articleId is only set if provided and valid, otherwise omit it
-      articleId: adData.articleId && ObjectId.isValid(adData.articleId) ? adData.articleId : undefined,
+    const newGadgetDocument = {
+      section: gadgetData.section,
+      title: gadgetData.title,
+      content: gadgetData.content,
+      isActive: gadgetData.isActive,
+      order: gadgetData.order, // Add order
       createdAt: new Date(),
       _id: new ObjectId(),
     };
-    // Remove articleId field if it's undefined to avoid storing null
-    if (newAdDocument.articleId === undefined) {
-        delete newAdDocument.articleId;
-    }
 
-    const result = await db.collection('advertisements').insertOne(newAdDocument);
-     if (result.acknowledged && newAdDocument._id) {
-      const insertedDoc = await db.collection('advertisements').findOne({ _id: newAdDocument._id });
-      return mapMongoDocumentToAdvertisement(insertedDoc);
+    const result = await db.collection('advertisements').insertOne(newGadgetDocument);
+     if (result.acknowledged && newGadgetDocument._id) {
+      const insertedDoc = await db.collection('advertisements').findOne({ _id: newGadgetDocument._id });
+      return mapMongoDocumentToGadget(insertedDoc);
     }
-    console.error("Failed to insert advertisement or retrieve inserted ID.");
+    console.error("Failed to insert gadget or retrieve inserted ID.");
     return null;
   } catch (error) {
-    console.error("Error adding advertisement:", error);
+    console.error("Error adding gadget:", error);
     return null;
   }
 }
 
-export async function getAllAdvertisements(): Promise<Advertisement[]> {
+// Renamed from getAllAdvertisements
+export async function getAllGadgets(): Promise<Gadget[]> {
   try {
     const { db } = await connectToDatabase();
-    const adsCursor = db.collection('advertisements').find({}).sort({ createdAt: -1 });
-    const adsArray = await adsCursor.toArray();
-    return adsArray.map(mapMongoDocumentToAdvertisement);
+    // Sort by section first, then by order within the section
+    const gadgetsCursor = db.collection('advertisements').find({}).sort({ section: 1, order: 1, createdAt: -1 });
+    const gadgetsArray = await gadgetsCursor.toArray();
+    return gadgetsArray.map(mapMongoDocumentToGadget);
   } catch (error) {
-    console.error("Error fetching all advertisements:", error);
+    console.error("Error fetching all gadgets:", error);
     return [];
   }
 }
 
-// Function to get *all* active ads for a specific placement, optionally filtered by articleId.
-// Returns an array of ads. The calling page component will handle selection/rotation.
-export async function getAdsByPlacement(placement: AdPlacement, articleId?: string): Promise<Advertisement[]> {
+// Function to get *all* active gadgets for a specific layout section.
+// Returns an array of gadgets, ordered by the 'order' field.
+// Renamed from getAdsByPlacement
+export async function getActiveGadgetsBySection(section: LayoutSection): Promise<Gadget[]> {
   try {
     const { db } = await connectToDatabase();
-    let query: any = { placement: placement, isActive: true };
+    let query: any = {
+        $or: [ // Match either new 'section' field or old 'placement' field
+            { section: section },
+            { placement: section }
+        ],
+        isActive: true
+    };
 
-    // If articleId is provided, first try to find article-specific ads
-    if (articleId && ObjectId.isValid(articleId)) {
-      const articleSpecificQuery = { ...query, articleId: articleId };
-      const articleSpecificAds = await db.collection('advertisements').find(articleSpecificQuery).sort({ createdAt: -1 }).toArray();
-
-      if (articleSpecificAds.length > 0) {
-        // console.log(`Found ${articleSpecificAds.length} article-specific ads for ${articleId} placement ${placement}`);
-        return articleSpecificAds.map(mapMongoDocumentToAdvertisement);
-      }
-       // console.log(`No article-specific ads found for ${articleId}, placement ${placement}. Falling back to global.`);
-    }
-
-    // Fallback: Find global ads (no articleId set) for the placement
-    query.articleId = { $exists: false };
-    const globalAdsCursor = db.collection('advertisements').find(query).sort({ createdAt: -1 });
-    const globalAdsArray = await globalAdsCursor.toArray();
-    // console.log(`Found ${globalAdsArray.length} global ads for placement ${placement}`);
-    return globalAdsArray.map(mapMongoDocumentToAdvertisement);
+    const gadgetsCursor = db.collection('advertisements').find(query).sort({ order: 1, createdAt: -1 });
+    const gadgetsArray = await gadgetsCursor.toArray();
+    // console.log(`Found ${gadgetsArray.length} active gadgets for section ${section}`);
+    return gadgetsArray.map(mapMongoDocumentToGadget);
 
   } catch (error) {
-    console.error(`Error fetching ads for placement ${placement}${articleId ? ` (article: ${articleId})` : ''}:`, error);
+    console.error(`Error fetching gadgets for section ${section}:`, error);
     return [];
   }
 }
 
 
-export async function updateAdvertisement(id: string, updates: Partial<Omit<Advertisement, 'id' | 'createdAt'>>): Promise<Advertisement | null> {
+// Renamed from updateAdvertisement
+export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id' | 'createdAt'>>): Promise<Gadget | null> {
   if (!ObjectId.isValid(id)) {
-    console.error("Invalid ID for ad update:", id);
+    console.error("Invalid ID for gadget update:", id);
     return null;
   }
   try {
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
 
+    // Prepare the update document, removing fields that shouldn't be directly set
     const updateDoc: any = { ...updates };
-    delete updateDoc.createdAt;
+    delete updateDoc.createdAt; // Cannot update createdAt
+    delete updateDoc.id;      // Cannot update id
 
-    // Handle articleId: allow setting it, or unsetting it by passing null/undefined/empty string
-    if (updates.articleId && ObjectId.isValid(updates.articleId)) {
-      updateDoc.articleId = updates.articleId;
-    } else {
-      // If articleId is explicitly provided as null/undefined/empty, remove it
-      if (updates.hasOwnProperty('articleId') && !updates.articleId) {
-         // We need to use $unset to remove the field completely
-         const { $set, $unset = {} } = { $set: {}, $unset: {} };
-         for (const key in updateDoc) {
-             if (key !== 'articleId') {
-                 $set[key] = updateDoc[key];
-             }
-         }
-         $unset['articleId'] = ""; // $unset requires a value, empty string works
 
-          const result = await db.collection('advertisements').findOneAndUpdate(
-              { _id: objectId },
-              { $set, $unset },
-              { returnDocument: 'after' }
-          );
-          return result ? mapMongoDocumentToAdvertisement(result) : null;
-      }
-      // If articleId wasn't in the updates object, don't change it
-      delete updateDoc.articleId;
-
+    // Handle potential renaming from old fields
+    if (updateDoc.placement && !updateDoc.section) {
+        updateDoc.section = updateDoc.placement;
+        delete updateDoc.placement;
     }
+    if (updateDoc.codeSnippet && !updateDoc.content) {
+        updateDoc.content = updateDoc.codeSnippet;
+        delete updateDoc.codeSnippet;
+    }
+    // Remove obsolete fields if they somehow sneak in
+    delete updateDoc.adType;
+    delete updateDoc.imageUrl;
+    delete updateDoc.linkUrl;
+    delete updateDoc.altText;
+    delete updateDoc.articleId; // articleId is removed from the gadget model
 
     const result = await db.collection('advertisements').findOneAndUpdate(
       { _id: objectId },
       { $set: updateDoc },
       { returnDocument: 'after' }
     );
-    return result ? mapMongoDocumentToAdvertisement(result) : null;
+    return result ? mapMongoDocumentToGadget(result) : null;
   } catch (error) {
-    console.error("Error updating advertisement:", error);
+    console.error("Error updating gadget:", error);
     return null;
   }
 }
 
-export async function deleteAdvertisement(id: string): Promise<boolean> {
+// Renamed from deleteAdvertisement
+export async function deleteGadget(id: string): Promise<boolean> {
   if (!ObjectId.isValid(id)) {
-    console.error("Invalid ID for ad delete:", id);
+    console.error("Invalid ID for gadget delete:", id);
     return false;
   }
   try {
@@ -296,7 +281,25 @@ export async function deleteAdvertisement(id: string): Promise<boolean> {
     const result = await db.collection('advertisements').deleteOne({ _id: objectId });
     return result.deletedCount === 1;
   } catch (error) {
-    console.error("Error deleting advertisement:", error);
+    console.error("Error deleting gadget:", error);
     return false;
   }
+}
+
+// --- Helper Functions ---
+
+// Function to get all distinct layout sections currently used by gadgets
+export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
+    try {
+        const { db } = await connectToDatabase();
+        // Check both 'section' and 'placement' fields for broader compatibility
+        const distinctSections = await db.collection('advertisements').distinct('section') as LayoutSection[];
+        const distinctPlacements = await db.collection('advertisements').distinct('placement') as LayoutSection[];
+        // Combine and deduplicate
+        const allSections = [...new Set([...distinctSections, ...distinctPlacements])];
+        return allSections.filter(s => s); // Filter out any null/undefined values
+    } catch (error) {
+        console.error("Error fetching distinct layout sections:", error);
+        return [];
+    }
 }

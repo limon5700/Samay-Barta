@@ -5,18 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Helper function to format ad placement names for display
-export function formatPlacementName(place: string | undefined | null): string {
-   // Extra safety checks: ensure 'place' is a non-empty string before calling replace
-  if (typeof place !== 'string' || !place) {
-    // console.warn("formatPlacementName received invalid input:", place);
-    return 'N/A'; // Return 'N/A' or similar for invalid/missing placements
+// Helper function to format layout section names for display
+export function formatSectionName(section: string | undefined | null): string {
+   // Extra safety checks: ensure 'section' is a non-empty string before calling replace
+  if (typeof section !== 'string' || !section) {
+    // console.warn("formatSectionName received invalid input:", section);
+    return 'N/A'; // Return 'N/A' or similar for invalid/missing sections
   }
   try {
     // Replace hyphens with spaces and capitalize each word
-    return place.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return section.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   } catch (error) {
-      console.error("Error in formatPlacementName with input:", place, error);
-      return place; // Return original value on error
+      console.error("Error in formatSectionName with input:", section, error);
+      return section; // Return original value on error
   }
 }

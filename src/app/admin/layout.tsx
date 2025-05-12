@@ -2,8 +2,8 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut, Megaphone } from 'lucide-react';
-import { logoutAction, getSession } from '@/app/admin/auth/actions'; 
+import { Home, Newspaper, LogOut, Layout } from 'lucide-react'; // Changed Megaphone to Layout
+import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import { redirect } from 'next/navigation';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -41,10 +41,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Manage Articles
               </Link>
             </Button>
+            {/* Updated Link and Icon */}
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/admin/advertisements">
-                <Megaphone className="h-4 w-4 mr-2" />
-                Manage Ads
+              <Link href="/admin/layout-editor">
+                <Layout className="h-4 w-4 mr-2" />
+                Layout Editor
               </Link>
             </Button>
             <form action={logoutAction}>

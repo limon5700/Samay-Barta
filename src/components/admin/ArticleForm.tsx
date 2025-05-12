@@ -28,6 +28,7 @@ import type { NewsArticle, Category, CreateNewsArticleData } from "@/lib/types";
 import { categories as allNewsCategories } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 
+// Zod schema for the form data itself
 const articleFormSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters." }).max(150),
   content: z.string().min(20, { message: "Content must be at least 20 characters." }),
@@ -35,18 +36,13 @@ const articleFormSchema = z.object({
   category: z.string().refine(val => allNewsCategories.includes(val as Category) || val === "", { message: "Please select a valid category."}),
   imageUrl: z.string().optional().or(z.literal('')), // Allow Data URLs or regular URLs
   dataAiHint: z.string().max(50).optional().or(z.literal('')),
-  inlineAdSnippetsInput: z.string().optional(), // Textarea input for snippets
+  // Textarea input for snippets, one snippet per line
+  inlineAdSnippetsInput: z.string().optional(),
 });
 
-// This represents the data structure after processing the form input
-// Note: This is slightly different from NewsArticle as it doesn't have id/publishedDate yet
-// and inlineAdSnippets is an array.
-type ProcessedArticleFormData = Omit<CreateNewsArticleData, 'inlineAdSnippets'> & {
-   inlineAdSnippets?: string[]; // Make sure this exists
-   // Include other fields from the form schema if they differ from CreateNewsArticleData
-   imageUrl?: string;
-   dataAiHint?: string;
-};
+// This represents the data structure after processing the form input for submission
+// It matches CreateNewsArticleData structure closely.
+type ProcessedArticleFormData = CreateNewsArticleData;
 
 
 export type ArticleFormData = z.infer<typeof articleFormSchema>;
@@ -71,7 +67,7 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
       imageUrl: article?.imageUrl || "",
       dataAiHint: article?.dataAiHint || "",
       // Join snippets array into a string for the textarea, handle if undefined/null
-      inlineAdSnippetsInput: article?.inlineAdSnippets?.join('\n') || "",
+      inlineAdSnippetsInput: article?.inlineAdSnippets?.join('\n\n') || "", // Separate snippets by double newline for readability
     },
   });
 
@@ -107,8 +103,8 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
   };
 
  const handleSubmit = (data: ArticleFormData) => {
-    // Process the inlineAdSnippetsInput into an array
-    const snippets = data.inlineAdSnippetsInput?.split('\n').filter(s => s.trim() !== '') || [];
+    // Process the inlineAdSnippetsInput into an array, splitting by double newline and trimming whitespace
+    const snippets = data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [];
 
     // Construct the final data object conforming to ProcessedArticleFormData
     const finalData: ProcessedArticleFormData = {
@@ -118,7 +114,7 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
         category: data.category,
         imageUrl: data.imageUrl || undefined, // Ensure empty string becomes undefined if needed by backend
         dataAiHint: data.dataAiHint || undefined,
-        inlineAdSnippets: snippets,
+        inlineAdSnippets: snippets, // Assign the processed array of snippets
     };
 
     onSubmit(finalData);
@@ -171,20 +167,21 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
           )}
         />
 
+         {/* Textarea for inline ad snippets */}
          <FormField
           control={form.control}
           name="inlineAdSnippetsInput"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Inline Ad Snippets (AdSense/Adsterra)</FormLabel>
+              <FormLabel>Inline Ad Snippets (Optional)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Paste one ad code snippet per line. These will replace [AD_INLINE] placeholders in the content, in order."
+                  placeholder="Paste ad code snippets here, separated by a blank line. These will replace [AD_INLINE] placeholders in the content, in order."
                   {...field}
-                  rows={5}
+                  rows={6}
                 />
               </FormControl>
-              <FormDescription>Enter external ad code snippets (like AdSense) to be inserted within the article content where `[AD_INLINE]` is placed.</FormDescription>
+              <FormDescription>Enter external ad code snippets (like AdSense/Adsterra) separated by blank lines. They will replace `[AD_INLINE]` placeholders sequentially.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

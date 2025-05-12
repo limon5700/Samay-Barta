@@ -2,43 +2,33 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { NewsArticle, Category, Advertisement, AdPlacement } from '@/lib/types';
-import { getAllNewsArticles, getAdsByPlacement } from '@/lib/data'; // Updated data import
+import type { NewsArticle, Category, Gadget, LayoutSection } from '@/lib/types'; // Use Gadget, LayoutSection
+import { getAllNewsArticles, getActiveGadgetsBySection } from '@/lib/data'; // Use getActiveGadgetsBySection
 import { categories as allNewsCategories } from '@/lib/constants';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';
 import CategoryFilter from '@/components/news/CategoryFilter';
-import AdDisplay from '@/components/ads/AdDisplay';
+import AdDisplay from '@/components/ads/AdDisplay'; // AdDisplay now handles Gadgets
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Card } from '@/components/ui/card'; // Import Card for sidebar placeholders
-
-
-// Helper function to select a random ad from an array
-const getRandomAd = (ads: Advertisement[]): Advertisement | null => {
-  if (!ads || ads.length === 0) {
-    return null;
-  }
-  const randomIndex = Math.floor(Math.random() * ads.length);
-  return ads[randomIndex];
-};
-
+import { Card } from '@/components/ui/card';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  // State to hold the *selected* ad for each placement
-   const [selectedAds, setSelectedAds] = useState<Record<AdPlacement, Advertisement | null>>({
-      'homepage-top': null,
-      'article-top': null, // Keep all placements for type safety
-      'article-bottom': null,
-      'sidebar-left': null,
-      'sidebar-right': null,
-      'footer': null,
-      'article-inline': null,
-      'popup': null,
-      'native': null,
+  // State to hold *all* active gadgets for each relevant placement
+  const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
+      'homepage-top': [],
+      'article-top': [],
+      'article-bottom': [],
+      'sidebar-left': [],
+      'sidebar-right': [],
+      'footer': [],
+      'article-inline': [],
+      'header-logo-area': [],
+      'below-header': [],
+      // Add other sections as needed
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,31 +46,40 @@ export default function HomePage() {
         const fetchedArticles = await getAllNewsArticles();
         setArticles(fetchedArticles);
 
-        // Fetch ads for all relevant homepage placements concurrently
-        const placementsToFetch: AdPlacement[] = [
+        // Define homepage-relevant sections
+        const sectionsToFetch: LayoutSection[] = [
           'homepage-top',
           'sidebar-left',
           'sidebar-right',
-          'footer'
+          'footer',
+          'header-logo-area',
+          'below-header',
+          // Add others if they appear on the homepage
         ];
-        const adFetchPromises = placementsToFetch.map(placement => getAdsByPlacement(placement)); // No articleId needed for homepage
-        const adsByPlacementArrays = await Promise.all(adFetchPromises);
 
-        // Select one random ad for each placement
-        const newSelectedAds: Record<AdPlacement, Advertisement | null> = { ...selectedAds };
-        placementsToFetch.forEach((placement, index) => {
-            newSelectedAds[placement] = getRandomAd(adsByPlacementArrays[index]);
-        });
-         setSelectedAds(newSelectedAds);
+        // Fetch all active gadgets for these sections concurrently
+        const gadgetFetchPromises = sectionsToFetch.map(section =>
+          getActiveGadgetsBySection(section)
+        );
+        const gadgetsBySectionArrays = await Promise.all(gadgetFetchPromises);
+
+        // Store the fetched gadgets in state
+        const newActiveGadgets: Record<LayoutSection, Gadget[]> = { ...activeGadgets }; // Start with empty/previous state
+         sectionsToFetch.forEach((section, index) => {
+            newActiveGadgets[section] = gadgetsBySectionArrays[index] || [];
+         });
+         setActiveGadgets(newActiveGadgets);
 
       } catch (error) {
         console.error("Failed to fetch data:", error);
         toast({ title: "Error", description: "Failed to load page content.", variant: "destructive" });
         setArticles([]);
-        setSelectedAds({ // Reset ads on error
-            'homepage-top': null, 'article-top': null, 'article-bottom': null, 'sidebar-left': null,
-            'sidebar-right': null, 'footer': null, 'article-inline': null, 'popup': null, 'native': null,
+        // Reset gadgets on error
+        const resetGadgets: Record<LayoutSection, Gadget[]> = {} as any;
+        Object.keys(activeGadgets).forEach(key => {
+            resetGadgets[key as LayoutSection] = [];
         });
+        setActiveGadgets(resetGadgets);
       } finally {
         setIsPageLoading(false);
       }
@@ -88,7 +87,7 @@ export default function HomePage() {
 
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, toast]); // selectedAds removed
+  }, [isClient, toast]); // Dependencies
 
   const filteredArticles = useMemo(() => {
     const safeArticles = Array.isArray(articles) ? articles : [];
@@ -111,29 +110,38 @@ export default function HomePage() {
     setSelectedCategory(category);
   }, []);
 
-  // --- Memoized Ad Components ---
-  const TopAdComponent = useMemo(() => selectedAds['homepage-top'] ? <AdDisplay ad={selectedAds['homepage-top']} className="mb-6" /> : null, [selectedAds]);
-  const SidebarLeftAdComponent = useMemo(() => selectedAds['sidebar-left'] ? <AdDisplay ad={selectedAds['sidebar-left']} className="mb-4" /> : null, [selectedAds]);
-  const SidebarRightAdComponent = useMemo(() => selectedAds['sidebar-right'] ? <AdDisplay ad={selectedAds['sidebar-right']} className="mb-4" /> : null, [selectedAds]);
-  const FooterAdComponent = useMemo(() => selectedAds['footer'] ? <AdDisplay ad={selectedAds['footer']} className="mt-6 container mx-auto px-4" /> : null, [selectedAds]);
-
+  // --- Render Gadgets Helper ---
+  const renderGadgetsForSection = (section: LayoutSection, className?: string) => {
+    const gadgets = activeGadgets[section] || [];
+    if (gadgets.length === 0) return null;
+    return (
+      <div className={`section-${section}-container ${className || ''}`}>
+        {gadgets.map((gadget) => (
+          <AdDisplay key={gadget.id} gadget={gadget} className="mb-4" /> // Add margin between gadgets
+        ))}
+      </div>
+    );
+  };
 
   const PageSkeleton = () => (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row gap-8">
          {/* Left Sidebar Skeleton */}
-        <aside className="w-full md:w-1/4 lg:w-1/5 order-last md:order-first">
-            <Skeleton className="h-48 w-full mb-4 rounded-md" />
+        <aside className="w-full md:w-1/4 lg:w-1/5 order-last md:order-first space-y-4">
+            <Skeleton className="h-48 w-full rounded-md" />
             <Skeleton className="h-32 w-full rounded-md" />
         </aside>
 
          {/* Main Content Skeleton */}
          <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order- A">
-            <Skeleton className="h-24 md:h-32 w-full mb-6 rounded-md" /> {/* Top Ad */}
+            {/* Top Gadget Area Skeleton */}
+            <Skeleton className="h-24 md:h-32 w-full mb-6 rounded-md" />
+            {/* Category Filter Skeleton */}
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-24 rounded-md" />)}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6"> {/* Adjusted grid for main area */}
+             {/* News List Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[...Array(4)].map((_, i) => (
                 <div key={i} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                     <Skeleton className="h-48 w-full rounded-xl" />
@@ -149,8 +157,8 @@ export default function HomePage() {
         </div>
 
          {/* Right Sidebar Skeleton */}
-         <aside className="w-full md:w-1/4 lg:w-1/5 order-last">
-            <Skeleton className="h-64 w-full mb-4 rounded-md" />
+         <aside className="w-full md:w-1/4 lg:w-1/5 order-last space-y-4">
+            <Skeleton className="h-64 w-full rounded-md" />
              <Skeleton className="h-40 w-full rounded-md" />
         </aside>
       </div>
@@ -162,7 +170,11 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
+      {/* Render gadgets in Header sections if defined */}
+      {renderGadgetsForSection('header-logo-area', 'container mx-auto px-4 pt-4')}
       <Header onSearch={handleSearch} />
+      {renderGadgetsForSection('below-header', 'container mx-auto px-4 pt-4')}
+
       <main className="flex-grow">
         {isPageLoading ? (
           <PageSkeleton />
@@ -171,18 +183,21 @@ export default function HomePage() {
              <div className="flex flex-col md:flex-row gap-8">
                  {/* Left Sidebar */}
                  <aside className="w-full md:w-1/4 lg:w-1/5 order-last md:order-first space-y-6">
-                     {SidebarLeftAdComponent}
-                     {/* Placeholder for other sidebar content */}
-                     <Card className="p-4 bg-muted/30">
-                        <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Left Sidebar</h3>
-                        <p className="text-xs text-muted-foreground">Other content goes here.</p>
-                     </Card>
+                     {/* Render all gadgets for the left sidebar */}
+                     {renderGadgetsForSection('sidebar-left')}
+                     {/* Placeholder for other non-gadget sidebar content */}
+                     {activeGadgets['sidebar-left']?.length === 0 && ( // Show placeholder only if no ads
+                         <Card className="p-4 bg-muted/30">
+                            <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Left Sidebar</h3>
+                            <p className="text-xs text-muted-foreground">Other content goes here.</p>
+                         </Card>
+                     )}
                 </aside>
 
                  {/* Main Content Area */}
                  <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order- A">
-                    {/* Display the top ad if available */}
-                    {TopAdComponent}
+                    {/* Render all gadgets for homepage top */}
+                    {renderGadgetsForSection('homepage-top', 'mb-6')}
 
                     <CategoryFilter
                       categories={allNewsCategories}
@@ -190,7 +205,6 @@ export default function HomePage() {
                       onSelectCategory={handleSelectCategory}
                     />
                     {filteredArticles.length > 0 ? (
-                       // Adjust grid columns if sidebars take space: lg:grid-cols-2 or even 1 if narrow
                       <NewsList articles={filteredArticles} />
                     ) : (
                       <p className="text-center text-muted-foreground mt-16 text-xl">
@@ -201,19 +215,22 @@ export default function HomePage() {
 
                  {/* Right Sidebar */}
                  <aside className="w-full md:w-1/4 lg:w-1/5 order-last space-y-6">
-                    {SidebarRightAdComponent}
-                    {/* Placeholder for other sidebar content */}
-                    <Card className="p-4 bg-muted/30">
-                        <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Right Sidebar</h3>
-                         <p className="text-xs text-muted-foreground">Other content goes here.</p>
-                     </Card>
+                    {/* Render all gadgets for the right sidebar */}
+                    {renderGadgetsForSection('sidebar-right')}
+                     {/* Placeholder for other non-gadget sidebar content */}
+                     {activeGadgets['sidebar-right']?.length === 0 && ( // Show placeholder only if no ads
+                        <Card className="p-4 bg-muted/30">
+                            <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Right Sidebar</h3>
+                            <p className="text-xs text-muted-foreground">Other content goes here.</p>
+                        </Card>
+                     )}
                 </aside>
             </div>
           </div>
         )}
       </main>
-       {/* Footer Ad Placement */}
-       {FooterAdComponent}
+       {/* Footer Gadget Placement */}
+       {renderGadgetsForSection('footer', 'container mx-auto px-4 pt-4')}
       <Footer />
     </div>
   );
