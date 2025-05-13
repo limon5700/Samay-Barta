@@ -4,9 +4,9 @@
 import React, { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { parseISO } from 'date-fns';
-import { formatInTimeZone } from 'date-fns-tz';
-import { ArrowLeft, Loader2, Youtube, Facebook, Link as LinkIcon } from 'lucide-react'; // Added social icons
+import { parseISO, formatDistanceToNow } from 'date-fns';
+import { bn } from 'date-fns/locale'; // Import Bengali locale
+import { ArrowLeft, Loader2, Youtube, Facebook, Link as LinkIcon } from 'lucide-react'; 
 
 import type { NewsArticle, Gadget, LayoutSection, SeoSettings } from '@/lib/types';
 import { getArticleById, getActiveGadgetsBySection, getSeoSettings } from '@/lib/data';
@@ -21,7 +21,6 @@ import Footer from '@/components/layout/Footer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppContext } from '@/context/AppContext';
 
-const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
 // Helper function to render content with inline ads
 const renderContentWithAds = (
@@ -30,7 +29,7 @@ const renderContentWithAds = (
   defaultInlineGadgets: Gadget[] = [],
   articleId: string
 ): React.ReactNode[] => {
-    const contentParts = content.split(/(\[AD_INLINE\])/g); // Split by [AD_INLINE] but keep delimiter
+    const contentParts = content.split(/(\[AD_INLINE\])/g); 
     const result: React.ReactNode[] = [];
     let snippetIndex = 0;
     let defaultGadgetIndex = 0;
@@ -68,21 +67,13 @@ const renderContentWithAds = (
                 defaultGadgetIndex = (defaultGadgetIndex + 1) % defaultInlineGadgets.length; 
                 adRendered = true;
             }
-             if (!adRendered) {
-                // console.warn("No ad available for [AD_INLINE] placeholder:", index);
-            }
+            // Removed warning log for unrendered ad
         } else if (part) { 
             result.push(<span key={`content-${articleId}-${index}`} dangerouslySetInnerHTML={{ __html: part.replace(/\n/g, '<br />') }} />);
         }
     });
     return result;
 };
-
-type Props = {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-};
-
 
 export default function ArticlePage() {
   const params = useParams();
@@ -311,7 +302,22 @@ export default function ArticlePage() {
 
   if (!article) return null; 
 
-  const formattedDate = article.publishedDate ? formatInTimeZone(parseISO(article.publishedDate), DHAKA_TIMEZONE, "MMMM d, yyyy 'at' h:mm a zzz") : "N/A";
+  let relativeDate = "N/A";
+  try {
+    if (article.publishedDate) {
+      relativeDate = formatDistanceToNow(parseISO(article.publishedDate), { addSuffix: true, locale: language === 'bn' ? bn : undefined });
+    }
+  } catch (e) {
+    console.warn("Error formatting relative date in ArticlePage:", e);
+    try {
+       if (article.publishedDate) {
+          relativeDate = new Date(article.publishedDate).toLocaleDateString(); // Fallback
+       }
+    } catch (parseError) {
+      console.warn("Error parsing date for fallback in ArticlePage:", parseError)
+    }
+  }
+
 
   return (
     <>
@@ -346,7 +352,7 @@ export default function ArticlePage() {
                       )}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground mb-2">
                         <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge>
-                        <span>{isClient ? getUIText("publishedDateLabel") || "Published" : "Published"}: {formattedDate}</span>
+                        <span>{isClient ? getUIText("publishedDateLabel") || "Published" : "Published"}: {relativeDate}</span>
                       </div>
                        {/* Article specific social links */}
                         <div className="flex items-center gap-3 mt-2">
