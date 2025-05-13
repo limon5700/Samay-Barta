@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Users, Info, ShieldCheck, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Placeholder: In a real app, these would be part of a more complex system
 // import { getUsers, assignRoleToUser, defineRole } from '@/lib/data/users'; // Example functions
 // import type { User, Role } from '@/lib/types/auth'; // Example types
 // import { useToast } from "@/hooks/use-toast";
@@ -19,39 +18,6 @@ export default function UserManagementPage() {
   // const [isSubmitting, setIsSubmitting] = useState(false);
   // const { toast } = useToast();
 
-  // useEffect(() => {
-  //   const fetchUserData = async () => {
-  //     setIsLoading(true);
-  //     try {
-  //       // const fetchedUsers = await getUsers(); // Placeholder
-  //       // const fetchedRoles = await getDefinedRoles(); // Placeholder
-  //       // setUsers(fetchedUsers);
-  //       // setRoles(fetchedRoles);
-  //       // Example:
-  //       setUsers([{ id: '1', username: 'admin', email: 'admin@example.com', role: 'Administrator' }]);
-  //       setRoles([{ id: 'admin', name: 'Administrator', permissions: ['manage_articles', 'manage_users', 'manage_seo'] }]);
-  //     } catch (error) {
-  //       toast({ title: "Error", description: "Failed to load user data.", variant: "destructive" });
-  //     } finally {
-  //       setIsLoading(false);
-  //     }
-  //   };
-  //   fetchUserData();
-  // }, [toast]);
-
-  // const handleAssignRole = async (userId: string, roleId: string) => {
-  //   setIsSubmitting(true);
-  //   try {
-  //     // await assignRoleToUser(userId, roleId); // Placeholder
-  //     toast({ title: "Success", description: "User role updated (simulated)." });
-  //     // Re-fetch users or update local state
-  //   } catch (error) {
-  //     toast({ title: "Error", description: "Failed to assign role.", variant: "destructive" });
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
-
   return (
     <div className="container mx-auto py-8">
       <Card className="shadow-lg rounded-xl">
@@ -61,44 +27,19 @@ export default function UserManagementPage() {
           </CardTitle>
           <CardDescription>
             Manage user accounts, roles, and permissions for the admin panel.
-            (This is a placeholder page for future development).
+            (This page is a placeholder for future development).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertTitle>Under Development</AlertTitle>
-              <AlertDescription>
-                Full user and role management features are complex and planned for future updates. 
-                This page demonstrates where such settings would be managed. Current authentication is limited to a single admin user defined in environment variables.
+            <Alert variant="default" className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/30 dark:border-yellow-700">
+              <Info className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+              <AlertTitle className="text-yellow-700 dark:text-yellow-300">Under Development</AlertTitle>
+              <AlertDescription className="text-yellow-600 dark:text-yellow-400">
+                A comprehensive User and Role Management system with granular permissions is planned for future updates.
+                Currently, authentication is limited to a single admin user defined via environment variables.
+                This section will allow creating roles (Admin, Editor, SEO Specialist), assigning users, and restricting access.
               </AlertDescription>
             </Alert>
-
-            {/* Example of how user list might look */}
-            {/* {isLoading ? <p>Loading users...</p> : (
-                <div className="space-y-4">
-                    {users.map(user => (
-                        <Card key={user.id}>
-                            <CardHeader>
-                                <CardTitle className="text-lg">{user.username}</CardTitle>
-                                <CardDescription>{user.email} - Role: {user.role}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Select onValueChange={(newRole) => handleAssignRole(user.id, newRole)} defaultValue={user.roleId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Assign role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {roles.map(role => (
-                                            <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )} */}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <Card className="bg-muted/30">
@@ -119,6 +60,7 @@ export default function UserManagementPage() {
                                 </ul>
                             </li>
                         </ul>
+                         <p className="mt-2 text-xs text-muted-foreground">This functionality is not yet implemented.</p>
                     </CardContent>
                 </Card>
                  <Card className="bg-muted/30">
@@ -133,6 +75,7 @@ export default function UserManagementPage() {
                             <li>Secure password management and reset functionalities.</li>
                             <li>Audit logs for tracking important user actions within the admin panel.</li>
                         </ul>
+                        <p className="mt-2 text-xs text-muted-foreground">This functionality is not yet implemented.</p>
                     </CardContent>
                 </Card>
             </div>

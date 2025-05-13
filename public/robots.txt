@@ -1,0 +1,9 @@
+
+User-agent: *
+Allow: /
+Disallow: /admin/ # Disallow crawling of admin pages
+
+Sitemap: https://samay-barta.vercel.app/sitemap.xml # Replace with your actual production domain
+# If using a dynamic site URL from env var, you might need a server-side route for robots.txt
+# or ensure this is updated during your build/deploy process for production.
+# For now, assuming a fixed production URL for the sitemap.

@@ -5,7 +5,6 @@ import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, Cr
 import { connectToDatabase, ObjectId } from './mongodb';
 import { initialSampleNewsArticles } from './constants'; 
 
-
 // Helper to map MongoDB document to NewsArticle type
 function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
   if (!doc) return null as any;
@@ -18,7 +17,15 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     publishedDate: doc.publishedDate instanceof Date ? doc.publishedDate.toISOString() : doc.publishedDate,
     imageUrl: doc.imageUrl,
     dataAiHint: doc.dataAiHint,
-    inlineAdSnippets: doc.inlineAdSnippets || [], 
+    inlineAdSnippets: doc.inlineAdSnippets || [],
+    // SEO fields
+    metaTitle: doc.metaTitle,
+    metaDescription: doc.metaDescription,
+    metaKeywords: doc.metaKeywords || [],
+    ogTitle: doc.ogTitle,
+    ogDescription: doc.ogDescription,
+    ogImage: doc.ogImage,
+    canonicalUrl: doc.canonicalUrl,
   };
 }
 
@@ -45,10 +52,15 @@ function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
         metaDescription: doc.metaDescription,
         metaKeywords: doc.metaKeywords || [],
         faviconUrl: doc.faviconUrl,
+        ogSiteName: doc.ogSiteName,
+        ogLocale: doc.ogLocale,
+        ogType: doc.ogType,
+        twitterCard: doc.twitterCard,
+        twitterSite: doc.twitterSite,
+        twitterCreator: doc.twitterCreator,
         updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
     };
 }
-
 
 export async function getAllNewsArticles(): Promise<NewsArticle[]> {
   try {
@@ -57,13 +69,23 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
     const count = await articlesCollection.countDocuments();
     if (count === 0 && initialSampleNewsArticles.length > 0) {
         console.log("Seeding initial news articles...");
-        const articlesToSeed = initialSampleNewsArticles.map(article => ({
-            ...article,
-            publishedDate: new Date(article.publishedDate), 
-            inlineAdSnippets: article.inlineAdSnippets || [],
-            id: undefined, 
-            _id: new ObjectId(), 
-        }));
+        const articlesToSeed = initialSampleNewsArticles.map(article => {
+            const { id, ...restOfArticle } = article; // Exclude frontend 'id'
+            return {
+                ...restOfArticle,
+                publishedDate: new Date(article.publishedDate), 
+                inlineAdSnippets: article.inlineAdSnippets || [],
+                 // SEO fields - ensure they exist or are empty arrays/undefined
+                metaTitle: article.metaTitle || '',
+                metaDescription: article.metaDescription || '',
+                metaKeywords: article.metaKeywords || [],
+                ogTitle: article.ogTitle || '',
+                ogDescription: article.ogDescription || '',
+                ogImage: article.ogImage || '',
+                canonicalUrl: article.canonicalUrl || '',
+                _id: new ObjectId(), 
+            };
+        });
         await articlesCollection.insertMany(articlesToSeed);
         console.log(`${articlesToSeed.length} articles seeded.`);
     }
@@ -84,6 +106,7 @@ export async function addNewsArticle(articleData: CreateNewsArticleData): Promis
       ...articleData,
       publishedDate: new Date(), 
       inlineAdSnippets: articleData.inlineAdSnippets || [], 
+      metaKeywords: Array.isArray(articleData.metaKeywords) ? articleData.metaKeywords : (articleData.metaKeywords ? (articleData.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k) : []),
       _id: new ObjectId(), 
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
@@ -99,7 +122,6 @@ export async function addNewsArticle(articleData: CreateNewsArticleData): Promis
     return null;
   }
 }
-
 
 export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>>): Promise<NewsArticle | null> {
   if (!ObjectId.isValid(id)) {
@@ -117,6 +139,10 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     } else if (!Array.isArray(updateDoc.inlineAdSnippets)) {
         updateDoc.inlineAdSnippets = [];
     }
+    if (updates.metaKeywords && !Array.isArray(updates.metaKeywords)) {
+        updateDoc.metaKeywords = (updates.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k);
+    }
+
 
     const result = await db.collection('articles').findOneAndUpdate(
       { _id: objectId },
@@ -129,7 +155,6 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     return null;
   }
 }
-
 
 export async function deleteNewsArticle(id: string): Promise<boolean> {
    if (!ObjectId.isValid(id)) {
@@ -162,7 +187,6 @@ export async function getArticleById(id: string): Promise<NewsArticle | null> {
     return null;
   }
 }
-
 
 export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | null> {
   try {
@@ -208,7 +232,7 @@ export async function getActiveGadgetsBySection(section: LayoutSection): Promise
     let query: any = {
         $or: [ 
             { section: section },
-            { placement: section }
+            { placement: section } // Keep for backward compatibility if old data exists
         ],
         isActive: true
     };
@@ -236,6 +260,7 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
     delete updateDoc.createdAt; 
     delete updateDoc.id;      
 
+    // Handle potential old field names 'placement' and 'codeSnippet'
     if (updateDoc.placement && !updateDoc.section) {
         updateDoc.section = updateDoc.placement;
         delete updateDoc.placement;
@@ -244,11 +269,12 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
         updateDoc.content = updateDoc.codeSnippet;
         delete updateDoc.codeSnippet;
     }
+    // Remove fields that are not part of the current Gadget type definition to prevent pollution
     delete updateDoc.adType;
     delete updateDoc.imageUrl;
     delete updateDoc.linkUrl;
     delete updateDoc.altText;
-    delete updateDoc.articleId; 
+    delete updateDoc.articleId; // This was likely for an older ad type not used by gadgets
 
     const result = await db.collection('advertisements').findOneAndUpdate(
       { _id: objectId },
@@ -278,62 +304,100 @@ export async function deleteGadget(id: string): Promise<boolean> {
   }
 }
 
-
 // --- SEO Settings ---
-// Placeholder functions for SEO settings.
-// In a real application, this would interact with a 'seo_settings' collection.
-
-const SEO_SETTINGS_ID = "global_seo_settings"; // Use a fixed ID for the single SEO settings document
+const GLOBAL_SEO_SETTINGS_DOC_ID = "global_seo_settings_doc"; // A unique, fixed string ID for the settings document
 
 export async function getSeoSettings(): Promise<SeoSettings | null> {
-    console.log("Attempting to get SEO settings (placeholder).");
-    // try {
-    //     const { db } = await connectToDatabase();
-    //     const settingsDoc = await db.collection('seo_settings').findOne({ _id: new ObjectId(SEO_SETTINGS_ID) }); // Or a fixed known ID
-    //     return settingsDoc ? mapMongoDocumentToSeoSettings(settingsDoc) : null;
-    // } catch (error) {
-    //     console.error("Error fetching SEO settings:", error);
-    //     return null;
-    // }
-    // Mock implementation:
-    return {
-        id: SEO_SETTINGS_ID,
-        siteTitle: "Samay Barta Lite - Default Title",
-        metaDescription: "Your concise news source, powered by AI.",
-        metaKeywords: ["news", "bangla news", "ai news"],
-        faviconUrl: "/favicon.ico", // Default favicon path
-        updatedAt: new Date().toISOString(),
-    };
+    try {
+        const { db } = await connectToDatabase();
+        // In MongoDB, string IDs need to be converted to ObjectId unless you store them as strings.
+        // For a single global settings doc, using a fixed string _id is simpler.
+        const settingsDoc = await db.collection('seo_settings').findOne({ _id: GLOBAL_SEO_SETTINGS_DOC_ID });
+        if (settingsDoc) {
+            // If using string _id, map it directly. If it was an ObjectId, convert it.
+             return {
+                id: settingsDoc._id.toString(), // Ensure ID is string
+                siteTitle: settingsDoc.siteTitle,
+                metaDescription: settingsDoc.metaDescription,
+                metaKeywords: settingsDoc.metaKeywords || [],
+                faviconUrl: settingsDoc.faviconUrl,
+                ogSiteName: settingsDoc.ogSiteName,
+                ogLocale: settingsDoc.ogLocale,
+                ogType: settingsDoc.ogType,
+                twitterCard: settingsDoc.twitterCard,
+                twitterSite: settingsDoc.twitterSite,
+                twitterCreator: settingsDoc.twitterCreator,
+                updatedAt: settingsDoc.updatedAt instanceof Date ? settingsDoc.updatedAt.toISOString() : settingsDoc.updatedAt,
+            };
+        }
+        // Return default settings if nothing is found in DB
+        return {
+            id: GLOBAL_SEO_SETTINGS_DOC_ID,
+            siteTitle: "Samay Barta Lite",
+            metaDescription: "Your concise news source, powered by AI.",
+            metaKeywords: ["news", "bangla news", "ai news", "latest news"],
+            faviconUrl: "/favicon.ico",
+            ogSiteName: "Samay Barta Lite",
+            ogLocale: "bn_BD",
+            ogType: "website",
+            twitterCard: "summary_large_image",
+            updatedAt: new Date().toISOString(),
+        };
+    } catch (error) {
+        console.error("Error fetching SEO settings:", error);
+         // Return default settings on error to prevent site crash
+        return {
+            id: GLOBAL_SEO_SETTINGS_DOC_ID,
+            siteTitle: "Samay Barta Lite - Default",
+            metaDescription: "Default description.",
+            metaKeywords: [],
+            faviconUrl: "/favicon.ico",
+            updatedAt: new Date().toISOString(),
+        };
+    }
 }
 
 export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Promise<SeoSettings | null> {
-    console.log("Attempting to update SEO settings (placeholder):", settingsData);
-    // try {
-    //     const { db } = await connectToDatabase();
-    //     const updateDoc = {
-    //         ...settingsData,
-    //         updatedAt: new Date(),
-    //     };
-    //     const result = await db.collection('seo_settings').findOneAndUpdate(
-    //         { _id: new ObjectId(SEO_SETTINGS_ID) }, // Or a fixed known ID
-    //         { $set: updateDoc },
-    //         { upsert: true, returnDocument: 'after' } // Create if it doesn't exist
-    //     );
-    //     return result ? mapMongoDocumentToSeoSettings(result) : null;
-    // } catch (error) {
-    //     console.error("Error updating SEO settings:", error);
-    //     return null;
-    // }
-    // Mock implementation:
-     const mockUpdatedSettings: SeoSettings = {
-        id: SEO_SETTINGS_ID,
-        ...settingsData,
-        metaKeywords: settingsData.metaKeywords || [],
-        updatedAt: new Date().toISOString(),
-    };
-    return mockUpdatedSettings;
-}
+    try {
+        const { db } = await connectToDatabase();
+        const updateDoc = {
+            ...settingsData,
+            metaKeywords: Array.isArray(settingsData.metaKeywords) ? settingsData.metaKeywords : (settingsData.metaKeywords || '').split(',').map(k => k.trim()).filter(k => k),
+            updatedAt: new Date(),
+        };
+        const result = await db.collection('seo_settings').findOneAndUpdate(
+            { _id: GLOBAL_SEO_SETTINGS_DOC_ID },
+            { $set: updateDoc },
+            { upsert: true, returnDocument: 'after' }
+        );
+        
+        // After upsert, result.value might be the document, or result itself if using older driver versions.
+        // Safely access the updated document.
+        const updatedDocument = result || (result && (result as any).value);
 
+
+        if (updatedDocument) {
+             return {
+                id: updatedDocument._id.toString(),
+                siteTitle: updatedDocument.siteTitle,
+                metaDescription: updatedDocument.metaDescription,
+                metaKeywords: updatedDocument.metaKeywords || [],
+                faviconUrl: updatedDocument.faviconUrl,
+                ogSiteName: updatedDocument.ogSiteName,
+                ogLocale: updatedDocument.ogLocale,
+                ogType: updatedDocument.ogType,
+                twitterCard: updatedDocument.twitterCard,
+                twitterSite: updatedDocument.twitterSite,
+                twitterCreator: updatedDocument.twitterCreator,
+                updatedAt: updatedDocument.updatedAt instanceof Date ? updatedDocument.updatedAt.toISOString() : updatedDocument.updatedAt,
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error("Error updating SEO settings:", error);
+        return null;
+    }
+}
 
 // --- Helper Functions ---
 export async function getUsedLayoutSections(): Promise<LayoutSection[]> {

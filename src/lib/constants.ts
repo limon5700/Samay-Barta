@@ -19,7 +19,7 @@ export const languageOptions: LanguageOption[] = [
   { value: 'ru', label: 'Russian (Русский)' },
 ];
 
-export const defaultLanguage: string = 'bn'; // Default language set to Bengali
+export const defaultLanguage: string = 'bn'; 
 
 export const uiTexts: Record<string, Record<string, string>> = {
   en: {
@@ -40,7 +40,6 @@ export const uiTexts: Record<string, Record<string, string>> = {
     couldNotTranslateArticle: "Could not translate the article. Please try again.",
     displayingOriginal: "Displaying Original",
     showingOriginalContent: "Showing the original article content.",
-    translateArticleTitle: "Translate Article", // This was on article page, might not be needed if content auto-translates
     translating: "Translating...",
     translateContent: "Translate Content",
     showOriginal: "Show Original",
@@ -60,6 +59,26 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleContentLabel: "Content",
     publishedDateLabel: "Published",
     error: "Error",
+    // SEO related texts
+    seoSiteTitleLabel: "Site Title",
+    seoMetaDescriptionLabel: "Meta Description",
+    seoMetaKeywordsLabel: "Meta Keywords (comma-separated)",
+    seoFaviconUrlLabel: "Favicon URL",
+    seoOgSiteNameLabel: "Open Graph Site Name",
+    seoOgLocaleLabel: "Open Graph Locale (e.g., en_US)",
+    seoOgTypeLabel: "Open Graph Type (e.g., website)",
+    seoTwitterCardLabel: "Twitter Card Type",
+    seoTwitterSiteLabel: "Twitter Site Handle (e.g., @username)",
+    seoTwitterCreatorLabel: "Twitter Creator Handle (Optional)",
+    seoSettingsSaved: "SEO settings saved successfully.",
+    seoSettingsError: "Error saving SEO settings.",
+    articleMetaTitleLabel: "Meta Title (SEO)",
+    articleMetaDescriptionLabel: "Meta Description (SEO)",
+    articleMetaKeywordsLabel: "Meta Keywords (SEO, comma-separated)",
+    articleOgTitleLabel: "Open Graph Title (Social)",
+    articleOgDescriptionLabel: "Open Graph Description (Social)",
+    articleOgImageLabel: "Open Graph Image URL (Social)",
+    articleCanonicalUrlLabel: "Canonical URL (Advanced)",
   },
   bn: {
     appName: "সময় বার্তা লাইট",
@@ -79,7 +98,6 @@ export const uiTexts: Record<string, Record<string, string>> = {
     couldNotTranslateArticle: "নিবন্ধটি অনুবাদ করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।",
     displayingOriginal: "মূল বিষয়বস্তু প্রদর্শিত হচ্ছে",
     showingOriginalContent: "নিবন্ধটির মূল বিষয়বস্তু দেখানো হচ্ছে।",
-    translateArticleTitle: "নিবন্ধ অনুবাদ করুন",
     translating: "অনুবাদ করা হচ্ছে...",
     translateContent: "বিষয়বস্তু অনুবাদ করুন",
     showOriginal: "মূল দেখান",
@@ -99,15 +117,34 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleContentLabel: "বিষয়বস্তু",
     publishedDateLabel: "প্রকাশিত",
     error: "ত্রুটি",
+    // SEO related texts
+    seoSiteTitleLabel: "সাইটের শিরোনাম",
+    seoMetaDescriptionLabel: "মেটা বর্ণনা",
+    seoMetaKeywordsLabel: "মেটা কীওয়ার্ড (কমা দ্বারা পৃথক)",
+    seoFaviconUrlLabel: "ফ্যাভিকন ইউআরএল",
+    seoOgSiteNameLabel: "ওপেন গ্রাফ সাইটের নাম",
+    seoOgLocaleLabel: "ওপেন গ্রাফ লোকেল (যেমন, bn_BD)",
+    seoOgTypeLabel: "ওপেন গ্রাফ প্রকার (যেমন, website)",
+    seoTwitterCardLabel: "টুইটার কার্ড প্রকার",
+    seoTwitterSiteLabel: "টুইটার সাইট হ্যান্ডেল (যেমন, @username)",
+    seoTwitterCreatorLabel: "টুইটার ক্রিয়েটর হ্যান্ডেল (ঐচ্ছিক)",
+    seoSettingsSaved: "এসইও সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে।",
+    seoSettingsError: "এসইও সেটিংস সংরক্ষণ করতে ত্রুটি।",
+    articleMetaTitleLabel: "মেটা শিরোনাম (এসইও)",
+    articleMetaDescriptionLabel: "মেটা বর্ণনা (এসইও)",
+    articleMetaKeywordsLabel: "মেটা কীওয়ার্ড (এসইও, কমা দ্বারা পৃথক)",
+    articleOgTitleLabel: "ওপেন গ্রাফ শিরোনাম (সোশ্যাল)",
+    articleOgDescriptionLabel: "ওপেন গ্রাফ বর্ণনা (সোশ্যাল)",
+    articleOgImageLabel: "ওপেন গ্রাফ ছবির ইউআরএল (সোশ্যাল)",
+    articleCanonicalUrlLabel: "ক্যানোনিকাল ইউআরএল (অ্যাডভান্সড)",
   },
 };
 
 export const categories: Category[] = ["Technology", "Sports", "Business", "World", "Entertainment"];
 
-// This can be used for seeding if DB is empty, but primary data source is now MongoDB
 export const initialSampleNewsArticles: NewsArticle[] = [
     {
-    id: '1', // Will be replaced by MongoDB _id
+    id: '1', 
     title: 'Groundbreaking AI Model Released by Tech Giant',
     content: 'A major technology corporation today unveiled a new artificial intelligence model that promises to revolutionize natural language processing. The model, named "Phoenix-7B", boasts an unprecedented number_of_parameters and has demonstrated superior performance in a variety of benchmarks, including text generation, translation, and question answering. Experts believe this could pave the way for more sophisticated AI applications in the near future. The company plans to offer API access to developers starting next quarter.',
     excerpt: 'A new AI model, Phoenix-7B, has been released, promising to revolutionize natural language processing with its advanced capabilities.',
@@ -115,6 +152,9 @@ export const initialSampleNewsArticles: NewsArticle[] = [
     publishedDate: '2024-07-28T10:00:00Z',
     imageUrl: 'https://picsum.photos/seed/tech1/400/200',
     dataAiHint: 'circuit board',
+    metaTitle: 'Tech Giant Unveils Phoenix-7B AI Model',
+    metaDescription: 'Explore the groundbreaking Phoenix-7B AI model, set to redefine natural language processing. Learn about its features and future applications.',
+    metaKeywords: ['AI', 'Artificial Intelligence', 'Phoenix-7B', 'Tech Giant', 'NLP'],
   },
   {
     id: '2',
@@ -126,113 +166,4 @@ export const initialSampleNewsArticles: NewsArticle[] = [
     imageUrl: 'https://picsum.photos/seed/sports1/400/200',
     dataAiHint: 'stadium lights',
   },
-  {
-    id: '3',
-    title: 'Stock Market Hits Record High Amidst Positive Economic Indicators',
-    content: 'Global stock markets reached new all-time highs this week, fueled by strong corporate earnings reports and positive economic data. Investor confidence appears to be on the rise despite ongoing geopolitical tensions. Analysts suggest that sectors like technology and renewable energy are leading the charge. However, some caution that a market correction could be on the horizon as valuations become stretched.',
-    excerpt: 'Global stock markets hit record highs, driven by strong earnings and positive economic news, particularly in tech and renewables.',
-    category: 'Business',
-    publishedDate: '2024-07-26T15:45:00Z',
-    imageUrl: 'https://picsum.photos/seed/business1/400/200',
-    dataAiHint: 'city skyline',
-  },
-  {
-    id: '4',
-    title: 'International Summit Addresses Climate Change Goals',
-    content: 'Leaders from around the world gathered for an international summit focused on tackling climate change. Discussions centered on renewing commitments to reduce carbon emissions and invest in green technologies. While some progress was made, activists argue that the pledges are still insufficient to meet the urgency of the crisis. The summit concluded with a joint declaration outlining future steps and cooperation efforts.',
-    excerpt: 'World leaders met at an international summit to discuss climate change, renewing emission reduction commitments.',
-    category: 'World',
-    publishedDate: '2024-07-25T12:00:00Z',
-    imageUrl: 'https://picsum.photos/seed/world1/400/200',
-    dataAiHint: 'earth globe',
-  },
-  {
-    id: '5',
-    title: 'New Sci-Fi Blockbuster Dominates Summer Box Office',
-    content: 'The latest science fiction epic, "Galaxy Wanderers", has taken the summer box office by storm, raking in over $300 million globally in its opening weekend. Directed by acclaimed filmmaker Anya Sharma, the film features stunning visual effects and a compelling storyline that has resonated with audiences and critics alike. It is projected to be one of the highest-grossing films of the year.',
-    excerpt: 'Sci-fi blockbuster "Galaxy Wanderers" is dominating the box office with over $300 million in its opening weekend.',
-    category: 'Entertainment',
-    publishedDate: '2024-07-24T18:00:00Z',
-    imageUrl: 'https://picsum.photos/seed/entertainment1/400/200',
-    dataAiHint: 'movie theater',
-  },
-  {
-    id: '6',
-    title: 'Advancements in Quantum Computing Promise Faster Processing',
-    content: 'Researchers have announced a significant breakthrough in quantum computing that could lead to processors capable of speeds unimaginable with current technology. This development focuses on qubit stability and error correction, two major hurdles in the field. While commercial quantum computers are still some years away, this progress accelerates the timeline for their potential impact on science, medicine, and cryptography.',
-    excerpt: 'A breakthrough in quantum computing could lead to significantly faster processors, focusing on qubit stability and error correction.',
-    category: 'Technology',
-    publishedDate: '2024-07-23T09:15:00Z',
-    imageUrl: 'https://picsum.photos/seed/tech2/400/200',
-    dataAiHint: 'abstract tech',
-  },
-  {
-    id: '7',
-    title: 'Local Athlete Smashes National Record in Marathon',
-    content: 'Hometown hero Alex Rivera smashed the national marathon record at yesterday\'s city marathon, finishing with an astonishing time of 2 hours and 5 minutes. Rivera, who trained relentlessly for this event, attributed the success to a new training regimen and unwavering community support. The previous record had stood for 15 years.',
-    excerpt: 'Local athlete Alex Rivera broke the national marathon record with a time of 2:05, attributing success to new training and support.',
-    category: 'Sports',
-    publishedDate: '2024-07-22T14:00:00Z',
-    imageUrl: 'https://picsum.photos/seed/sports2/400/200',
-    dataAiHint: 'running track',
-  },
 ];
-
-// Sample Gadgets (for initial seeding if needed, or for reference)
-// Note: In a real scenario, these would be managed via the Layout Editor in the admin panel.
-// export const initialSampleGadgets: Gadget[] = [
-//   {
-//     id: 'gadget-header-1',
-//     section: 'header-logo-area',
-//     title: 'Header Banner Ad',
-//     content: '<div style="width:100%; height:90px; background-color: #f0f0f0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Header Ad (e.g., 728x90)</div>',
-//     isActive: true,
-//     order: 1,
-//     createdAt: new Date().toISOString(),
-//   },
-//   {
-//     id: 'gadget-sidebar-left-1',
-//     section: 'sidebar-left',
-//     title: 'Left Sidebar Ad Unit 1',
-//     content: '<div style="width:100%; height:250px; background-color: #e0e0e0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc; margin-bottom: 10px;">Sidebar Ad 1 (e.g., 300x250)</div>',
-//     isActive: true,
-//     order: 1,
-//     createdAt: new Date().toISOString(),
-//   },
-//   {
-//     id: 'gadget-sidebar-left-2',
-//     section: 'sidebar-left',
-//     title: 'Left Sidebar Ad Unit 2',
-//     content: '<div style="width:100%; height:250px; background-color: #d0d0d0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Sidebar Ad 2 (e.g., 300x250)</div>',
-//     isActive: true,
-//     order: 2,
-//     createdAt: new Date().toISOString(),
-//   },
-//   {
-//     id: 'gadget-sidebar-right-1',
-//     section: 'sidebar-right',
-//     title: 'Right Sidebar Ad Unit',
-//     content: '<div style="width:100%; height:600px; background-color: #c0c0c0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Tall Sidebar Ad (e.g., 300x600)</div>',
-//     isActive: true,
-//     order: 1,
-//     createdAt: new Date().toISOString(),
-//   },
-//   {
-//     id: 'gadget-footer-1',
-//     section: 'footer',
-//     title: 'Footer Banner Ad',
-//     content: '<div style="width:100%; height:90px; background-color: #b0b0b0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc; margin-top: 20px;">Footer Ad (e.g., 728x90)</div>',
-//     isActive: true,
-//     order: 1,
-//     createdAt: new Date().toISOString(),
-//   },
-//   {
-//     id: 'default-inline-ad',
-//     section: 'article-inline',
-//     title: 'Default Inline Article Ad',
-//     content: '<div style="width:100%; padding: 10px 0; margin: 15px 0; background-color: #f0ead6; text-align:center; border: 1px dashed #999;">Default Inline Ad Placeholder</div>',
-//     isActive: true,
-//     order: 1,
-//     createdAt: new Date().toISOString(),
-//   }
-// ];

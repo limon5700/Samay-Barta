@@ -1,9 +1,10 @@
 
 "use client";
 
+import type { Metadata } from 'next';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { NewsArticle, Category, Gadget, LayoutSection } from '@/lib/types';
-import { getAllNewsArticles, getActiveGadgetsBySection } from '@/lib/data';
+import { getAllNewsArticles, getActiveGadgetsBySection, getSeoSettings } from '@/lib/data';
 import { categories as allNewsCategories } from '@/lib/constants';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -15,20 +16,43 @@ import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+// It's better to move generateMetadata to a server context or keep this page as a Server Component
+// if metadata generation needs to be async and server-side.
+// However, since `getSeoSettings` is a server action, it can be called from here.
+// For client components, metadata is usually set in the parent `layout.tsx` or via `Head` from `next/head` (for Pages Router).
+// With App Router, `generateMetadata` is the standard for server components.
+// If this page MUST remain "use client", then dynamic metadata here is tricky without `next/head`.
+// For now, assuming `layout.tsx` handles general metadata.
+// If specific homepage metadata (different from layout) is needed from a client component, it's more complex.
+// Let's assume `layout.tsx` provides sufficient default SEO and this page focuses on content.
+
+// If we were to make this a server component, or use a server component to wrap it for metadata:
+// export async function generateMetadata(): Promise<Metadata> {
+//   const seoSettings = await getSeoSettings();
+//   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
+//   return {
+//     title: seoSettings?.siteTitle || 'Home - Samay Barta Lite',
+//     description: seoSettings?.metaDescription || 'Latest news from Samay Barta Lite.',
+//     alternates: {
+//       canonical: '/',
+//     },
+//     openGraph: {
+//       title: seoSettings?.siteTitle || 'Home - Samay Barta Lite',
+//       description: seoSettings?.metaDescription || 'Latest news from Samay Barta Lite.',
+//       url: siteUrl,
+//       siteName: seoSettings?.ogSiteName || 'Samay Barta Lite',
+//       type: 'website',
+//     },
+//   };
+// }
+
+
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
-    'homepage-top': [],
-    'homepage-content-bottom': [],
-    'homepage-article-interstitial': [], // Added new section
-    'article-top': [], 
-    'article-bottom': [], 
-    'sidebar-left': [],
-    'sidebar-right': [],
-    'footer': [],
-    'article-inline': [], 
-    'header-logo-area': [],
-    'below-header': [],
+    'homepage-top': [], 'homepage-content-bottom': [], 'homepage-article-interstitial': [],
+    'article-top': [], 'article-bottom': [],  'sidebar-left': [], 'sidebar-right': [],
+    'footer': [], 'article-inline': [], 'header-logo-area': [], 'below-header': [],
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,25 +72,17 @@ export default function HomePage() {
         setArticles(sortedArticles);
 
         const sectionsToFetch: LayoutSection[] = [
-          'homepage-top',
-          'homepage-content-bottom',
-          'homepage-article-interstitial', // Fetch gadgets for this section
-          'sidebar-left',
-          'sidebar-right',
-          'footer',
-          'header-logo-area',
-          'below-header',
+          'homepage-top', 'homepage-content-bottom', 'homepage-article-interstitial',
+          'sidebar-left', 'sidebar-right', 'footer', 'header-logo-area', 'below-header',
         ];
-        const gadgetFetchPromises = sectionsToFetch.map(section =>
-          getActiveGadgetsBySection(section)
-        );
-        const gadgetsBySectionArrays = await Promise.all(gadgetFetchPromises);
-
-        const newActiveGadgetsState: Partial<Record<LayoutSection, Gadget[]>> = {};
+        const gadgetPromises = sectionsToFetch.map(section => getActiveGadgetsBySection(section));
+        const gadgetResults = await Promise.all(gadgetPromises);
+        
+        const newActiveGadgets: Partial<Record<LayoutSection, Gadget[]>> = {};
         sectionsToFetch.forEach((section, index) => {
-          newActiveGadgetsState[section] = gadgetsBySectionArrays[index] || [];
+          newActiveGadgets[section] = gadgetResults[index] || [];
         });
-        setActiveGadgets(prev => ({...prev, ...newActiveGadgetsState}));
+        setActiveGadgets(prev => ({...prev, ...newActiveGadgets}));
 
       } catch (error) {
         console.error("Failed to fetch articles or gadgets:", error);
@@ -117,55 +133,37 @@ export default function HomePage() {
   const PageSkeleton = () => (
     <div className="flex flex-col min-h-screen">
       <Skeleton className="h-16 w-full mb-4 rounded-none" />
-      
-      <div className="container mx-auto px-4">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" /> 
-      </div>
-
+      <div className="container mx-auto px-4"><Skeleton className="h-24 w-full mb-6 rounded-md" /></div>
       <div className="container mx-auto px-4 flex-grow">
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Sidebar Skeleton */}
           <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-4">
-            <Skeleton className="h-48 w-full rounded-md" />
-            <Skeleton className="h-32 w-full rounded-md" />
+            <Skeleton className="h-48 w-full rounded-md" /> <Skeleton className="h-32 w-full rounded-md" />
           </aside>
-
-          {/* Main Content Area Skeleton */}
           <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6"> {/* Adjusted for interstitial ads */}
-              {[...Array(6)].map((_, i) => ( // Simulate articles and potential ad slots
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {[...Array(6)].map((_, i) => (
                 <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                   <Skeleton className="h-40 w-full rounded-xl" />
                   <div className="space-y-2 pt-2">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-6 w-3/4" /> <Skeleton className="h-4 w-1/2" /> <Skeleton className="h-4 w-5/6" />
                   </div>
                   <Skeleton className="h-10 w-full rounded-md mt-auto" />
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Right Sidebar Skeleton */}
           <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-4">
-            <Skeleton className="h-64 w-full rounded-md" />
-            <Skeleton className="h-40 w-full rounded-md" />
+            <Skeleton className="h-64 w-full rounded-md" /> <Skeleton className="h-40 w-full rounded-md" />
           </aside>
         </div>
-         {/* Homepage Content Bottom Skeleton (for 2 ads) */}
         <div className="mt-8 space-y-4">
-            <Skeleton className="h-24 w-full rounded-md" />
-            <Skeleton className="h-24 w-full rounded-md" />
+            <Skeleton className="h-24 w-full rounded-md" /> <Skeleton className="h-24 w-full rounded-md" />
         </div>
       </div>
-      
-      <div className="container mx-auto px-4 mt-8">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" /> 
-      </div>
+      <div className="container mx-auto px-4 mt-8"><Skeleton className="h-24 w-full mb-6 rounded-md" /></div>
       <Skeleton className="h-16 w-full mt-4 rounded-none" /> 
     </div>
   );
@@ -177,14 +175,10 @@ export default function HomePage() {
       {renderGadgetsForSection('below-header', 'container mx-auto px-4 pt-4')}
 
       <main className="flex-grow container mx-auto px-4 py-8">
-        {isPageLoading ? (
-          <PageSkeleton />
-        ) : (
+        {isPageLoading ? (<PageSkeleton />) : (
           <>
             {renderGadgetsForSection('homepage-top', 'mb-8')}
-            
             <div className="flex flex-col md:flex-row gap-8">
-              {/* Left Sidebar */}
               <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-6">
                 {renderGadgetsForSection('sidebar-left')}
                 {activeGadgets['sidebar-left']?.length === 0 && (
@@ -194,28 +188,14 @@ export default function HomePage() {
                   </Card>
                 )}
               </aside>
-
-              {/* Main Content Area */}
               <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
-                <CategoryFilter
-                  categories={allNewsCategories}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={handleSelectCategory}
-                />
+                <CategoryFilter categories={allNewsCategories} selectedCategory={selectedCategory} onSelectCategory={handleSelectCategory} />
                 {filteredArticles.length > 0 ? (
-                  <NewsList 
-                    articles={filteredArticles} 
-                    interstitialGadgets={activeGadgets['homepage-article-interstitial']} 
-                    adsAfterEvery={2} // Display ad after every 2 articles
-                  />
+                  <NewsList articles={filteredArticles} interstitialGadgets={activeGadgets['homepage-article-interstitial']} adsAfterEvery={2} />
                 ) : (
-                  <p className="text-center text-muted-foreground mt-16 text-xl">
-                    {getUIText("noArticlesFound")}
-                  </p>
+                  <p className="text-center text-muted-foreground mt-16 text-xl">{getUIText("noArticlesFound")}</p>
                 )}
               </div>
-
-              {/* Right Sidebar */}
               <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-6">
                 {renderGadgetsForSection('sidebar-right')}
                  {activeGadgets['sidebar-right']?.length === 0 && (
@@ -226,14 +206,10 @@ export default function HomePage() {
                 )}
               </aside>
             </div>
-            {/* Homepage Content Bottom Ads */}
-            <div className="mt-8">
-                {renderGadgetsForSection('homepage-content-bottom')}
-            </div>
+            <div className="mt-8">{renderGadgetsForSection('homepage-content-bottom')}</div>
           </>
         )}
       </main>
-
       {renderGadgetsForSection('footer', 'container mx-auto px-4 pt-8 pb-4')}
       <Footer />
     </div>
