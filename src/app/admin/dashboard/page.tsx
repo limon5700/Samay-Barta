@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -29,11 +28,11 @@ import {
   addNewsArticle,
   updateNewsArticle,
   deleteNewsArticle,
-  getDashboardAnalytics, // Import the new analytics function
+  getDashboardAnalytics,
   getTopUserPostActivity
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
-import AnalyticsCard from "@/components/admin/AnalyticsCard"; // Import the new AnalyticsCard
+import AnalyticsCard from "@/components/admin/AnalyticsCard"; 
 
 const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
@@ -57,14 +56,16 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     setIsAnalyticsLoading(true);
     try {
-      const [analyticsData, topUsers] = await Promise.all([
+      const [analyticsData, topUsersData] = await Promise.all([
         getDashboardAnalytics(),
-        getTopUserPostActivity(5) // Fetch top 5 users
+        getTopUserPostActivity(5) 
       ]);
-      setAnalytics(analyticsData);
-      setTopUsersActivity(topUsers);
+      setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
+      setTopUsersActivity(topUsersData ?? []);
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch dashboard analytics.", variant: "destructive" });
+      setAnalytics({ totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
+      setTopUsersActivity([]);
     } finally {
       setIsAnalyticsLoading(false);
     }
@@ -111,7 +112,7 @@ export default function DashboardPage() {
       const success = await deleteNewsArticle(articleToDelete.id);
       if (success) {
         await fetchArticles(); 
-        await fetchDashboardData(); // Refresh analytics
+        await fetchDashboardData(); 
         toast({ title: "Success", description: "Article deleted successfully." });
       } else {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
@@ -146,6 +147,9 @@ export default function DashboardPage() {
             ogDescription: data.ogDescription,
             ogImage: data.ogImage,
             canonicalUrl: data.canonicalUrl,
+            articleYoutubeUrl: data.articleYoutubeUrl,
+            articleFacebookUrl: data.articleFacebookUrl,
+            articleMoreLinksUrl: data.articleMoreLinksUrl,
          };
         const result = await updateNewsArticle(editingArticle.id, updateData);
         if (result) {
@@ -169,6 +173,9 @@ export default function DashboardPage() {
             ogDescription: data.ogDescription,
             ogImage: data.ogImage,
             canonicalUrl: data.canonicalUrl,
+            articleYoutubeUrl: data.articleYoutubeUrl,
+            articleFacebookUrl: data.articleFacebookUrl,
+            articleMoreLinksUrl: data.articleMoreLinksUrl,
          };
         const result = await addNewsArticle(createData);
          if (result) {
@@ -178,7 +185,7 @@ export default function DashboardPage() {
         }
       }
       await fetchArticles(); 
-      await fetchDashboardData(); // Refresh analytics
+      await fetchDashboardData(); 
       setIsAddEditDialogOpen(false);
       setEditingArticle(null);
     } catch (error) {
@@ -189,18 +196,46 @@ export default function DashboardPage() {
       setIsSubmitting(false);
     }
   };
+  
+  const errorExplanation = (
+     <Card className="mb-6 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
+        <CardHeader>
+            <CardTitle className="text-lg text-yellow-800 dark:text-yellow-300">Note on Console Errors &amp; Page Display</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-yellow-700 dark:text-yellow-200 space-y-2">
+            <p>
+                If you see errors in your browser's developer console related to <code>extensions.aitopia.ai</code> or similar domains not controlled by this application, these are likely caused by a browser extension you have installed (e.g., Aitopia). These errors are not part of Samay Barta Lite and can usually be ignored or resolved by managing your browser extensions.
+            </p>
+            <p>
+                If this Dashboard page, or other admin pages, appear blank or don't load correctly (showing "An error occurred in the Server Components render" on a white screen), and there are no other specific errors in the console directly related to the application's files (e.g., <code>dashboard/page.tsx</code>, <code>lib/data.ts</code>, <code>lib/mongodb.ts</code>), the issue might be due to:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Environment Variables:</strong> Crucial environment variables (like <code>MONGODB_URI</code> or <code>GEMINI_API_KEY</code>) might be missing or incorrect in your Vercel project settings (or your local <code>.env</code> file). Ensure they are correctly set and that the <code>MONGODB_URI</code> does not contain any placeholder values like <code>&lt;username&gt;</code> or <code>&lt;cluster-url&gt;</code>.</li>
+                <li><strong>Database Connectivity:</strong> There could be an issue connecting to your MongoDB database (e.g., incorrect credentials in the URI, IP allowlist on MongoDB Atlas not configured for Vercel, or network issues).</li>
+                <li><strong>API Key Issues:</strong> The <code>GEMINI_API_KEY</code> might be invalid or have exceeded its quota.</li>
+                <li><strong>Server-Side Errors:</strong> An unhandled error might be occurring in one of the server actions called by this page. Check Vercel deployment logs for more specific error messages from the server.</li>
+            </ul>
+             <p>
+                Ensure all environment variables are correctly configured in your Vercel project dashboard for the deployed version to function correctly.
+            </p>
+        </CardContent>
+     </Card>
+  );
 
   if (isLoading || isAnalyticsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <div className="container mx-auto py-8">
+        {errorExplanation}
+        <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto py-8">
-      {/* Analytics Overview Section */}
+      {errorExplanation}
       <Card className="shadow-lg rounded-xl mb-8">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
@@ -216,11 +251,10 @@ export default function DashboardPage() {
               <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
               <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
               
-              {/* Placeholder for Visitor Stats - requires backend implementation */}
-              <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
               <AnalyticsCard title="Active Visitors Now" value={analytics.visitorStats?.activeNow?.toString() ?? "N/A"} icon={Activity} description="Requires tracking setup" />
-              <AnalyticsCard title="Visitors This Week" value={analytics.visitorStats?.thisWeek.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
-              <AnalyticsCard title="Visitors This Month" value={analytics.visitorStats?.thisMonth.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              <AnalyticsCard title="Visitors This Week" value={analytics.visitorStats?.thisWeek?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              <AnalyticsCard title="Visitors This Month" value={analytics.visitorStats?.thisMonth?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
 
             </div>
           ) : (
@@ -229,14 +263,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       
-      {/* User Post Activity Section - Placeholder */}
       {topUsersActivity.length > 0 && (
         <Card className="shadow-lg rounded-xl mb-8">
             <CardHeader>
                 <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
                     <Users /> Top User Activity
                 </CardTitle>
-                <CardDescription>Most active users by post count (requires author tracking).</CardDescription>
+                <CardDescription>Most active users by post count (requires authorId tracking on articles).</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -264,8 +297,6 @@ export default function DashboardPage() {
         </Card>
       )}
 
-
-      {/* Manage News Articles Section */}
       <Card className="shadow-lg rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -314,7 +345,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Article Dialog */}
       <Dialog open={isAddEditDialogOpen} onOpenChange={(isOpen) => {
           if (!isOpen) {
               setIsAddEditDialogOpen(false);
@@ -344,7 +374,6 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={(isOpen) => {
           if (!isOpen) {
               setIsDeleteDialogOpen(false);
@@ -357,7 +386,7 @@ export default function DashboardPage() {
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the article &quot;{articleToDelete?.title}&quot;? This action cannot be undone.
+              Are you sure you want to delete the article &amp;quot;{articleToDelete?.title}&amp;quot;? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-end gap-2">
@@ -376,4 +405,3 @@ export default function DashboardPage() {
       </Dialog>
     </div>
   );
-}
