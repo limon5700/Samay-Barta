@@ -16,36 +16,9 @@ import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// It's better to move generateMetadata to a server context or keep this page as a Server Component
-// if metadata generation needs to be async and server-side.
-// However, since `getSeoSettings` is a server action, it can be called from here.
-// For client components, metadata is usually set in the parent `layout.tsx` or via `Head` from `next/head` (for Pages Router).
-// With App Router, `generateMetadata` is the standard for server components.
-// If this page MUST remain "use client", then dynamic metadata here is tricky without `next/head`.
-// For now, assuming `layout.tsx` handles general metadata.
-// If specific homepage metadata (different from layout) is needed from a client component, it's more complex.
-// Let's assume `layout.tsx` provides sufficient default SEO and this page focuses on content.
-
-// If we were to make this a server component, or use a server component to wrap it for metadata:
-// export async function generateMetadata(): Promise<Metadata> {
-//   const seoSettings = await getSeoSettings();
-//   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
-//   return {
-//     title: seoSettings?.siteTitle || 'Home - Samay Barta Lite',
-//     description: seoSettings?.metaDescription || 'Latest news from Samay Barta Lite.',
-//     alternates: {
-//       canonical: '/',
-//     },
-//     openGraph: {
-//       title: seoSettings?.siteTitle || 'Home - Samay Barta Lite',
-//       description: seoSettings?.metaDescription || 'Latest news from Samay Barta Lite.',
-//       url: siteUrl,
-//       siteName: seoSettings?.ogSiteName || 'Samay Barta Lite',
-//       type: 'website',
-//     },
-//   };
-// }
-
+// Metadata generation is typically handled by `layout.tsx` for client components,
+// or this page would need to be a Server Component if dynamic metadata from `getSeoSettings` is critical here.
+// Assuming `layout.tsx` provides sufficient default SEO.
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -143,8 +116,8 @@ export default function HomePage() {
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {[...Array(6)].map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Ensure 4 columns for skeleton too */}
+              {[...Array(8)].map((_, i) => ( // Display 8 skeletons for a 4-column layout to show 2 rows
                 <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                   <Skeleton className="h-40 w-full rounded-xl" />
                   <div className="space-y-2 pt-2">
@@ -191,7 +164,11 @@ export default function HomePage() {
               <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
                 <CategoryFilter categories={allNewsCategories} selectedCategory={selectedCategory} onSelectCategory={handleSelectCategory} />
                 {filteredArticles.length > 0 ? (
-                  <NewsList articles={filteredArticles} interstitialGadgets={activeGadgets['homepage-article-interstitial']} adsAfterEvery={2} />
+                  <NewsList 
+                    articles={filteredArticles} 
+                    interstitialGadgets={activeGadgets['homepage-article-interstitial']} 
+                    adsAfterEvery={2} // Ad after every 2 articles
+                  />
                 ) : (
                   <p className="text-center text-muted-foreground mt-16 text-xl">{getUIText("noArticlesFound")}</p>
                 )}
@@ -215,3 +192,4 @@ export default function HomePage() {
     </div>
   );
 }
+

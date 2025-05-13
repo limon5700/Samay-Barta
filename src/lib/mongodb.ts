@@ -9,14 +9,21 @@ if (!MONGODB_URI) {
   );
 }
 
-// Basic check for common placeholders to prevent EBADNAME errors
-// Uncommented this check to provide a more specific error if placeholders are still present.
-if (MONGODB_URI.includes('<username>') || MONGODB_URI.includes('<password>') || MONGODB_URI.includes('<cluster-url>') || MONGODB_URI.includes('<dbname>')) {
-  console.error("ERROR: MONGODB_URI in your .env file seems to contain placeholder values like <username>, <password>, <cluster-url>, or <dbname>.");
+// Enhanced check for common placeholders to prevent EBADNAME errors and guide the user.
+const placeholderPattern = /<[^>]+>/g; // Matches any string in angle brackets e.g. <username>
+if (placeholderPattern.test(MONGODB_URI) || MONGODB_URI.includes('YOUR_CLUSTER_URL') || MONGODB_URI.includes('YOUR_DB_NAME') || MONGODB_URI.includes('YOUR_USERNAME') || MONGODB_URI.includes('YOUR_PASSWORD')) {
+  console.error("ERROR: MONGODB_URI in your .env file appears to contain placeholder values (e.g., <username>, <password>, <cluster-url>, <dbname>, YOUR_USERNAME, etc.).");
   console.error("Please replace these placeholders with your actual MongoDB credentials and cluster information.");
-  console.error("Your current MONGODB_URI (partially masked):", MONGODB_URI.replace(/<password>/g, '****').replace(/<username>/g, '****'));
+  let maskedUri = MONGODB_URI;
+  const placeholders = ['<username>', '<password>', 'YOUR_USERNAME', 'YOUR_PASSWORD'];
+  placeholders.forEach(ph => {
+    if (MONGODB_URI.includes(ph)) {
+        maskedUri = maskedUri.replace(new RegExp(ph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '****');
+    }
+  });
+  console.error("Your current MONGODB_URI (partially masked for logging):", maskedUri);
   throw new Error(
-    'MONGODB_URI contains placeholder values. Please update your .env file with actual credentials and ensure no angle brackets <> remain.'
+    'MONGODB_URI contains placeholder values. Please update your .env file with actual credentials and ensure no placeholder bracketed values <> or "YOUR_..." strings remain.'
   );
 }
 
@@ -85,12 +92,12 @@ export async function connectToDatabase(): Promise<MongoConnection> {
         const pathSegments = url.pathname.substring(1).split('/');
         dbName = pathSegments[0] || undefined; 
 
-        if (!dbName) {
-            if (MONGODB_URI.startsWith('mongodb+srv://')) {
-                 console.warn(`Database name not explicitly found in MONGODB_URI path for SRV connection: ${url.pathname}. The driver will use the default database specified in your connection string options (e.g., after the slash in the host part or 'authSource' if relevant and configured), or 'test' if none is found. Ensure your SRV URI is complete, like 'mongodb+srv://user:pass@cluster/<dbname>?options'.`);
-            } else {
-                 console.warn(`Database name not found in MONGODB_URI path: ${url.pathname}. The driver may default to 'test'. Ensure your URI includes the database name, like 'mongodb://host/<dbname>'.`);
-            }
+        if (!dbName && MONGODB_URI.startsWith('mongodb+srv://')) {
+            // For SRV, if path is empty or just "/", db name might be in options or default.
+            // MongoDB driver handles this, but good to be aware.
+            console.warn(`Database name not explicitly found in MONGODB_URI path for SRV connection: ${url.pathname}. The driver will use the default database specified in your connection string options or 'test' if none is found. Ensure your SRV URI is complete, like 'mongodb+srv://user:pass@cluster/<dbname>?options'.`);
+        } else if (!dbName) {
+            console.warn(`Database name not found in MONGODB_URI path: ${url.pathname}. The driver may default to 'test'. Ensure your URI includes the database name, like 'mongodb://host/<dbname>'.`);
         }
     } catch (e: any) {
         console.error("Could not parse MONGODB_URI to extract database name. This might indicate a malformed URI. URI used (password and username masked for security):", MONGODB_URI.replace(/:\/\/([^:]+):([^@]+)@/, '://<user>:****@'));
@@ -99,7 +106,7 @@ export async function connectToDatabase(): Promise<MongoConnection> {
         // or one specified directly in the connection string options (if any).
     }
 
-    const db = client.db(dbName); // If dbName is undefined, MongoDB driver typically uses the 'defaultauthdb' or 'test' or one specified in URI.
+    const db = client.db(dbName); // If dbName is undefined, MongoDB driver typically uses 'test' or one specified in URI options.
     
     cachedClient = client;
     cachedDb = db;
@@ -111,6 +118,10 @@ export async function connectToDatabase(): Promise<MongoConnection> {
     console.error("Connection Error Details:", error.message);
     if (error.message && error.message.includes('querySrv EBADNAME')) {
         console.error("This 'querySrv EBADNAME' error often means the cluster URL in your MONGODB_URI is incorrect or your DNS cannot resolve it. Double-check the <cluster-url> part of your SRV string.");
+    } else if (error.message && error.message.includes('Authentication failed')) {
+        console.error("MongoDB Authentication Failed: Please double-check your username and password in the MONGODB_URI.");
+    } else if (error.message && error.message.includes('ECONNREFUSED')) {
+        console.error("MongoDB Connection Refused: Ensure the MongoDB server is running and accessible from your application's environment. Check firewall rules and IP allowlists if applicable.");
     }
     if (client && typeof client.close === 'function') {
         try {
