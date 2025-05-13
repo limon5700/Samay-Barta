@@ -109,10 +109,10 @@ export default function HomePage() {
       <div className="container mx-auto px-4"><Skeleton className="h-24 w-full mb-6 rounded-md" /></div>
       <div className="container mx-auto px-4 flex-grow">
         <div className="flex flex-col md:flex-row gap-8">
-          <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-4">
+          <aside className="w-full md:w-1/5 lg:w-[15%] order-2 md:order-1 space-y-4">
             <Skeleton className="h-48 w-full rounded-md" /> <Skeleton className="h-32 w-full rounded-md" />
           </aside>
-          <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
+          <div className="w-full md:w-3/5 lg:w-[70%] order-1 md:order-2">
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
@@ -128,7 +128,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-4">
+          <aside className="w-full md:w-1/5 lg:w-[15%] order-3 md:order-3 space-y-4">
             <Skeleton className="h-64 w-full rounded-md" /> <Skeleton className="h-40 w-full rounded-md" />
           </aside>
         </div>
@@ -152,7 +152,7 @@ export default function HomePage() {
           <>
             {renderGadgetsForSection('homepage-top', 'mb-8')}
             <div className="flex flex-col md:flex-row gap-8">
-              <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-6">
+              <aside className="w-full md:w-1/5 lg:w-[15%] order-2 md:order-1 space-y-6">
                 {renderGadgetsForSection('sidebar-left')}
                 {activeGadgets['sidebar-left']?.length === 0 && (
                   <Card className="p-4 bg-muted/30 hidden md:block">
@@ -161,7 +161,7 @@ export default function HomePage() {
                   </Card>
                 )}
               </aside>
-              <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
+              <div className="w-full md:w-3/5 lg:w-[70%] order-1 md:order-2">
                 <CategoryFilter categories={allNewsCategories} selectedCategory={selectedCategory} onSelectCategory={handleSelectCategory} />
                 {filteredArticles.length > 0 ? (
                   <NewsList 
@@ -173,7 +173,7 @@ export default function HomePage() {
                   <p className="text-center text-muted-foreground mt-16 text-xl">{getUIText("noArticlesFound")}</p>
                 )}
               </div>
-              <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-6">
+              <aside className="w-full md:w-1/5 lg:w-[15%] order-3 md:order-3 space-y-6">
                 {renderGadgetsForSection('sidebar-right')}
                  {activeGadgets['sidebar-right']?.length === 0 && (
                    <Card className="p-4 bg-muted/30 hidden md:block">
