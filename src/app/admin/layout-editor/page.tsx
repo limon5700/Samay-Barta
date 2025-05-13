@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -187,9 +186,9 @@ export default function LayoutEditorPage() {
                 You might see errors in your browser's developer console mentioning:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-                <li><code>GET /admin/advertisements 404 (Not Found)</code>: This specific path is not used. Gadget management is handled here on the "Layout Editor" page (<code>/admin/layout-editor</code>).</li>
-                 <li><code>CORS policy</code> errors related to <code>extensions.aitopia.ai</code>: These errors are likely caused by a browser extension you have installed (like Aitopia) and are not related to this application's code. They can usually be ignored or resolved by managing your browser extensions.</li>
-                <li><code>TypeError: Cannot read properties of undefined (reading 'replace')</code>: This issue related to gadget sections should now be resolved. If it persists, it might indicate corrupted gadget data in the database.</li>
+                <li><code>GET /admin/advertisements 404 (Not Found)</code>: This specific path is not used for gadget management. Gadget management is handled here on the "Layout Editor" page (<code>/admin/layout-editor</code>). This error can be safely ignored.</li>
+                 <li><code>CORS policy</code> errors related to domains like <code>extensions.aitopia.ai</code>: These errors are likely caused by a browser extension you have installed (e.g., Aitopia) and are not related to this application's code. They can usually be ignored or resolved by managing your browser extensions.</li>
+                <li><code>TypeError: Cannot read properties of undefined (reading 'replace')</code> in relation to <code>formatSectionName</code>: This issue typically occurs if a gadget in the database has an invalid or missing 'section' field. The application now includes more robust checks for this. If it persists, it might indicate corrupted gadget data.</li>
             </ul>
         </CardContent>
      </Card>
@@ -310,3 +309,4 @@ export default function LayoutEditorPage() {
     </div>
   );
 }
+

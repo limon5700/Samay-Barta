@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,10 +133,10 @@ export default function SeoManagementPage() {
         </CardHeader>
         <CardContent className="text-sm text-yellow-700 dark:text-yellow-200 space-y-2">
             <p>
-                If you see errors in your browser's developer console related to <code>extensions.aitopia.ai</code> or similar domains not controlled by this application, these are likely caused by a browser extension you have installed. These errors are not part of Samay Barta Lite and can usually be ignored or resolved by managing your browser extensions.
+                If you see errors in your browser's developer console related to <code>extensions.aitopia.ai</code> or similar domains not controlled by this application, these are likely caused by a browser extension you have installed (e.g., Aitopia). These errors are not part of Samay Barta Lite and can usually be ignored or resolved by managing your browser extensions.
             </p>
             <p>
-                If this SEO Management page appears blank or doesn't load correctly, and there are no errors in the console directly related to <code>seo/page.tsx</code> or <code>lib/data.ts</code>, the issue might still be due to browser extension interference or a network problem preventing data loading. Please check for other console errors that are not from third-party extensions.
+                If this SEO Management page, or other admin pages, appear blank or don't load correctly, and there are no errors in the console directly related to the application's files (e.g., <code>seo/page.tsx</code>, <code>lib/data.ts</code>, <code>lib/mongodb.ts</code>), the issue might still be due to browser extension interference, a network problem preventing data loading, or an issue with server-side data fetching (like database connection problems). Please check your browser extensions and ensure your environment variables (especially `MONGODB_URI` and `GEMINI_API_KEY`) are correctly set both locally in `.env` and in your Vercel project settings if deployed.
             </p>
         </CardContent>
      </Card>
