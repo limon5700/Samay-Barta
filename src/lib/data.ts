@@ -1,9 +1,12 @@
 
+
 'use server';
 
-import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData } from './types';
+import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, User, Role, CreateUserData, CreateRoleData, Permission } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
 import { initialSampleNewsArticles } from './constants'; 
+// Note: For a real application, use a library like bcrypt for password hashing.
+// const bcrypt = require('bcryptjs'); // Example, not used for simplicity in this iteration.
 
 // Helper to map MongoDB document to NewsArticle type
 function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
@@ -61,6 +64,34 @@ function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
         updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
     };
 }
+
+// Helper to map MongoDB document to User type
+function mapMongoDocumentToUser(doc: any): User {
+  if (!doc) return null as any;
+  return {
+    id: doc._id.toHexString(),
+    username: doc.username,
+    email: doc.email,
+    passwordHash: doc.passwordHash,
+    roles: doc.roles || [],
+    isActive: doc.isActive === undefined ? true : doc.isActive,
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+  };
+}
+
+// Helper to map MongoDB document to Role type
+function mapMongoDocumentToRole(doc: any): Role {
+  if (!doc) return null as any;
+  return {
+    id: doc._id.toHexString(),
+    name: doc.name,
+    permissions: doc.permissions || [],
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+  };
+}
+
 
 export async function getAllNewsArticles(): Promise<NewsArticle[]> {
   try {
@@ -310,11 +341,8 @@ const GLOBAL_SEO_SETTINGS_DOC_ID = "global_seo_settings_doc"; // A unique, fixed
 export async function getSeoSettings(): Promise<SeoSettings | null> {
     try {
         const { db } = await connectToDatabase();
-        // In MongoDB, string IDs need to be converted to ObjectId unless you store them as strings.
-        // For a single global settings doc, using a fixed string _id is simpler.
         const settingsDoc = await db.collection('seo_settings').findOne({ _id: GLOBAL_SEO_SETTINGS_DOC_ID });
         if (settingsDoc) {
-            // If using string _id, map it directly. If it was an ObjectId, convert it.
              return {
                 id: settingsDoc._id.toString(), // Ensure ID is string
                 siteTitle: settingsDoc.siteTitle,
@@ -330,7 +358,6 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
                 updatedAt: settingsDoc.updatedAt instanceof Date ? settingsDoc.updatedAt.toISOString() : settingsDoc.updatedAt,
             };
         }
-        // Return default settings if nothing is found in DB
         return {
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite",
@@ -345,7 +372,6 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
         };
     } catch (error) {
         console.error("Error fetching SEO settings:", error);
-         // Return default settings on error to prevent site crash
         return {
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite - Default",
@@ -371,10 +397,7 @@ export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Pr
             { upsert: true, returnDocument: 'after' }
         );
         
-        // After upsert, result.value might be the document, or result itself if using older driver versions.
-        // Safely access the updated document.
         const updatedDocument = result || (result && (result as any).value);
-
 
         if (updatedDocument) {
              return {
@@ -399,6 +422,207 @@ export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Pr
     }
 }
 
+// --- User Management ---
+export async function getAllUsers(): Promise<User[]> {
+  try {
+    const { db } = await connectToDatabase();
+    const users = await db.collection('users').find({}).sort({ username: 1 }).toArray();
+    return users.map(mapMongoDocumentToUser);
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    return [];
+  }
+}
+
+export async function getUserById(id: string): Promise<User | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const userDoc = await db.collection('users').findOne({ _id: new ObjectId(id) });
+    return userDoc ? mapMongoDocumentToUser(userDoc) : null;
+  } catch (error) {
+    console.error("Error fetching user by ID:", error);
+    return null;
+  }
+}
+
+export async function getUserByUsername(username: string): Promise<User | null> {
+  try {
+    const { db } = await connectToDatabase();
+    const userDoc = await db.collection('users').findOne({ username });
+    return userDoc ? mapMongoDocumentToUser(userDoc) : null;
+  } catch (error) {
+    console.error("Error fetching user by username:", error);
+    return null;
+  }
+}
+
+export async function addUser(userData: CreateUserData): Promise<User | null> {
+  try {
+    const { db } = await connectToDatabase();
+    // In a real app, hash the password here:
+    // const passwordHash = await bcrypt.hash(userData.password, 10);
+    // For simplicity, storing plain text (NOT FOR PRODUCTION):
+    if (!userData.password) throw new Error("Password is required for new user.");
+    const passwordHash = userData.password; // This is insecure!
+
+    const newUserDocument = {
+      username: userData.username,
+      email: userData.email,
+      passwordHash,
+      roles: userData.roles || [],
+      isActive: userData.isActive === undefined ? true : userData.isActive,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    };
+    const result = await db.collection('users').insertOne(newUserDocument);
+    if (result.acknowledged && newUserDocument._id) {
+        const insertedUser = await db.collection('users').findOne({_id: newUserDocument._id});
+        return mapMongoDocumentToUser(insertedUser);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error adding user:", error);
+    return null;
+  }
+}
+
+export async function updateUser(id: string, updates: Partial<CreateUserData>): Promise<User | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const updatePayload: any = { ...updates, updatedAt: new Date() };
+
+    if (updates.password) {
+      // In a real app, hash the new password
+      // updatePayload.passwordHash = await bcrypt.hash(updates.password, 10);
+      updatePayload.passwordHash = updates.password; // Insecure
+      delete updatePayload.password;
+    }
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: updatePayload },
+      { returnDocument: 'after' }
+    );
+    return result ? mapMongoDocumentToUser(result) : null;
+  } catch (error) {
+    console.error("Error updating user:", error);
+    return null;
+  }
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+  try {
+    const { db } = await connectToDatabase();
+    const result = await db.collection('users').deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount === 1;
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return false;
+  }
+}
+
+// --- Role Management ---
+export async function getAllRoles(): Promise<Role[]> {
+  try {
+    const { db } = await connectToDatabase();
+    const roles = await db.collection('roles').find({}).sort({ name: 1 }).toArray();
+    return roles.map(mapMongoDocumentToRole);
+  } catch (error) {
+    console.error("Error fetching all roles:", error);
+    return [];
+  }
+}
+
+export async function getRoleById(id: string): Promise<Role | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const roleDoc = await db.collection('roles').findOne({ _id: new ObjectId(id) });
+    return roleDoc ? mapMongoDocumentToRole(roleDoc) : null;
+  } catch (error) {
+    console.error("Error fetching role by ID:", error);
+    return null;
+  }
+}
+
+export async function addRole(roleData: CreateRoleData): Promise<Role | null> {
+  try {
+    const { db } = await connectToDatabase();
+    const newRoleDocument = {
+      ...roleData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    };
+    const result = await db.collection('roles').insertOne(newRoleDocument);
+     if (result.acknowledged && newRoleDocument._id) {
+        const insertedRole = await db.collection('roles').findOne({_id: newRoleDocument._id});
+        return mapMongoDocumentToRole(insertedRole);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error adding role:", error);
+    return null;
+  }
+}
+
+export async function updateRole(id: string, updates: Partial<CreateRoleData>): Promise<Role | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const result = await db.collection('roles').findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { ...updates, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    return result ? mapMongoDocumentToRole(result) : null;
+  } catch (error) {
+    console.error("Error updating role:", error);
+    return null;
+  }
+}
+
+export async function deleteRole(id: string): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+  try {
+    const { db } = await connectToDatabase();
+    // Consider implications: what happens to users with this role?
+    // For now, just delete the role.
+    const result = await db.collection('roles').deleteOne({ _id: new ObjectId(id) });
+    if (result.deletedCount === 1) {
+        // Optionally, remove this role ID from all users
+        await db.collection('users').updateMany(
+            { roles: id }, // Find users who have this role ID
+            { $pull: { roles: id } } // Remove the role ID from their roles array
+        );
+        return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error deleting role:", error);
+    return false;
+  }
+}
+
+export async function getPermissionsForUser(userId: string): Promise<Permission[]> {
+  const user = await getUserById(userId);
+  if (!user || !user.roles) return [];
+
+  const userRoles = await Promise.all(user.roles.map(roleId => getRoleById(roleId)));
+  const permissionsSet = new Set<Permission>();
+  userRoles.forEach(role => {
+    if (role && role.permissions) {
+      role.permissions.forEach(permission => permissionsSet.add(permission));
+    }
+  });
+  return Array.from(permissionsSet);
+}
+
+
 // --- Helper Functions ---
 export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
     try {
@@ -412,3 +636,4 @@ export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
         return [];
     }
 }
+

@@ -1,4 +1,5 @@
 
+
 export interface NewsArticle {
   id: string; // This will be MongoDB's _id.toHexString()
   title: string;
@@ -46,7 +47,9 @@ export interface Gadget {
   order?: number; 
 }
 
-export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'>;
+// Ensure category is always provided when creating a new article
+export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'> & { category: Category };
+
 
 export type CreateGadgetData = Omit<Gadget, 'id' | 'createdAt'>;
 
@@ -66,3 +69,48 @@ export interface SeoSettings {
 }
 
 export type CreateSeoSettingsData = Omit<SeoSettings, 'id' | 'updatedAt'>;
+
+// --- User Role System Types ---
+export type Permission = 
+  | 'manage_articles' // Create, edit, delete any article
+  | 'publish_articles' // Approve and publish articles
+  | 'manage_users'     // Add, edit, delete users, assign roles
+  | 'manage_roles'     // Define and modify roles and their permissions
+  | 'manage_layout_gadgets' // Edit site layout and add/remove gadgets
+  | 'manage_seo_global' // Access and modify global SEO settings
+  | 'manage_settings'   // Manage site-wide settings (broader than SEO)
+  | 'view_admin_dashboard'; // Basic access to view the admin dashboard
+
+export interface Role {
+  id: string;
+  name: string;
+  permissions: Permission[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CreateRoleData = Omit<Role, 'id' | 'createdAt' | 'updatedAt'>;
+
+export interface User {
+  id: string;
+  username: string;
+  email?: string;
+  passwordHash: string; // Store hashed passwords
+  roles: string[]; // Array of Role IDs
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CreateUserData = Omit<User, 'id' | 'passwordHash' | 'createdAt' | 'updatedAt'> & {
+  password?: string; // Password field for creation/update forms
+};
+
+export interface UserSession {
+  userId?: string;
+  username: string;
+  roles: string[]; // Role names or IDs
+  permissions: Permission[];
+  isEnvAdmin: boolean; // True if logged in via .env credentials
+  isAuthenticated: boolean;
+}

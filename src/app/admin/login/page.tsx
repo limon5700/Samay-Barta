@@ -1,17 +1,19 @@
 
+
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, LogIn, Loader2 } from "lucide-react";
-import { loginAction } from "@/app/admin/auth/actions"; // Updated path
+import { loginAction } from "@/app/admin/auth/actions"; 
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // To get redirect URL
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,8 @@ export default function LoginPage() {
       const result = await loginAction(formData);
 
       if (result?.success) {
-        router.push("/admin/dashboard");
+        const redirectUrl = searchParams.get('redirect') || "/admin/dashboard";
+        router.push(redirectUrl);
       } else {
         setError(result?.error || "Login failed. Please check your credentials.");
       }

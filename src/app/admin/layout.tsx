@@ -1,17 +1,29 @@
 
+
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3 } from 'lucide-react'; // Added Settings, Users, BarChart3
+import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3, ShieldCheck } from 'lucide-react'; // Added ShieldCheck for roles
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import { redirect } from 'next/navigation';
+import type { UserSession } from '@/lib/types';
+
+// Helper function to check if user has a specific permission
+const hasPermission = (session: UserSession | null, permission: string): boolean => {
+  if (!session) return false;
+  if (session.isEnvAdmin) return true; // .env admin has all permissions
+  return session.permissions?.includes(permission as any) || false;
+};
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
 
-  if (!session?.isAuthenticated && typeof window !== 'undefined') {
-    // Middleware handles this better.
+  // If no session and trying to access admin area (not login page), redirect
+  // This logic is mostly handled by middleware, but double check here.
+  if (!session?.isAuthenticated && typeof window !== 'undefined') { 
+    // This check is problematic in server component, middleware handles redirection
   }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -27,30 +39,43 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 View Site
               </Link>
             </Button>
-            <Button variant="default" size="sm" asChild>
-              <Link href="/admin/dashboard">
-                <Newspaper className="h-4 w-4 mr-2" />
-                Manage Articles
-              </Link>
-            </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/admin/layout-editor">
-                <Layout className="h-4 w-4 mr-2" />
-                Layout Editor
-              </Link>
-            </Button>
-             <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/users">
-                <Users className="h-4 w-4 mr-2" />
-                User Management
-              </Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/seo">
-                <BarChart3 className="h-4 w-4 mr-2" />
-                SEO Management
-              </Link>
-            </Button>
+            
+            {hasPermission(session, 'view_admin_dashboard') && (
+                 <Button variant="default" size="sm" asChild>
+                    <Link href="/admin/dashboard">
+                        <Newspaper className="h-4 w-4 mr-2" />
+                        Manage Articles
+                    </Link>
+                </Button>
+            )}
+
+            {hasPermission(session, 'manage_layout_gadgets') && (
+                <Button variant="secondary" size="sm" asChild>
+                <Link href="/admin/layout-editor">
+                    <Layout className="h-4 w-4 mr-2" />
+                    Layout Editor
+                </Link>
+                </Button>
+            )}
+            
+            {(hasPermission(session, 'manage_users') || hasPermission(session, 'manage_roles')) && (
+                <Button variant="ghost" size="sm" asChild>
+                <Link href="/admin/users">
+                    <Users className="h-4 w-4 mr-2" /> {/* Combined for simplicity now */}
+                    User & Role Mgmt
+                </Link>
+                </Button>
+            )}
+
+            {hasPermission(session, 'manage_seo_global') && (
+                <Button variant="ghost" size="sm" asChild>
+                <Link href="/admin/seo">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    SEO Management
+                </Link>
+                </Button>
+            )}
+            
             <form action={logoutAction}>
               <Button variant="destructive" size="sm" type="submit" className="gap-1.5">
                 <LogOut className="h-4 w-4" />
@@ -67,4 +92,3 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </div>
   );
 }
-
