@@ -1,5 +1,3 @@
-
-
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,13 +14,20 @@ const hasPermission = (session: UserSession | null, permission: string): boolean
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const session = await getSession();
+  let session: UserSession | null = null;
+  try {
+    session = await getSession();
+  } catch (error) {
+    console.error("CRITICAL: Error fetching session in AdminLayout:", error);
+    // In a production scenario, you might want to redirect to an error page or show a generic error message.
+    // For now, this will log the error on the server. The page might still fail to render correctly or redirect via middleware.
+  }
 
   // If no session and trying to access admin area (not login page), redirect
   // This logic is mostly handled by middleware, but double check here.
-  if (!session?.isAuthenticated && typeof window !== 'undefined') { 
-    // This check is problematic in server component, middleware handles redirection
-  }
+  // This specific check is problematic in server component environment and typically handled by middleware
+  // if (!session?.isAuthenticated && typeof window !== 'undefined') { 
+  // }
 
 
   return (
@@ -92,3 +97,4 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </div>
   );
 }
+
