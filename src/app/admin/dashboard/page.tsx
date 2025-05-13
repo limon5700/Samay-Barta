@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PlusCircle, Edit, Trash2, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { formatInTimeZone } from 'date-fns-tz'; // Import formatInTimeZone
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -32,6 +32,8 @@ import {
   // Remove CreateNewsArticleData from here if it's only a type
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
+
+const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
 export default function DashboardPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -114,6 +116,7 @@ export default function DashboardPage() {
             category: data.category,
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
+            inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
          };
         const result = await updateNewsArticle(editingArticle.id, updateData);
         if (result) {
@@ -130,6 +133,7 @@ export default function DashboardPage() {
             category: data.category,
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
+            inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
          };
         const result = await addNewsArticle(createData);
          if (result) {
@@ -190,7 +194,7 @@ export default function DashboardPage() {
                   <TableRow key={article.id}>
                     <TableCell className="font-medium">{article.title}</TableCell>
                     <TableCell>{article.category}</TableCell>
-                    <TableCell>{format(new Date(article.publishedDate), "MMM d, yyyy, h:mm a")}</TableCell>
+                    <TableCell>{formatInTimeZone(new Date(article.publishedDate), DHAKA_TIMEZONE, "MMM d, yyyy, h:mm a zzz")}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleEditArticle(article)} className="mr-2 hover:text-primary">
                         <Edit className="h-4 w-4" />

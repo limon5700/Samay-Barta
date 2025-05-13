@@ -2,23 +2,32 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { NewsArticle, Category } from '@/lib/types'; // Removed Gadget, LayoutSection as they are not used directly in this UI version
-import { getAllNewsArticles } from '@/lib/data'; // Removed getActiveGadgetsBySection
+import type { NewsArticle, Category, Gadget, LayoutSection } from '@/lib/types';
+import { getAllNewsArticles, getActiveGadgetsBySection } from '@/lib/data';
 import { categories as allNewsCategories } from '@/lib/constants';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import NewsList from '@/components/news/NewsList';
 import CategoryFilter from '@/components/news/CategoryFilter';
-// import AdDisplay from '@/components/ads/AdDisplay'; // Removed AdDisplay import as gadgets are not rendered this way now
+import AdDisplay from '@/components/ads/AdDisplay';
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppContext } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-// import { Card } from '@/components/ui/card'; // Removed Card import if not used directly for layout
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  // Removed state for activeGadgets as the complex gadget rendering is removed from homepage UI
-  // const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({ ... });
+  const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
+    'homepage-top': [],
+    'article-top': [], // Not directly used on homepage but part of type
+    'article-bottom': [], // Not directly used on homepage
+    'sidebar-left': [],
+    'sidebar-right': [],
+    'footer': [],
+    'article-inline': [], // Not directly used on homepage
+    'header-logo-area': [],
+    'below-header': [],
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
@@ -31,18 +40,33 @@ export default function HomePage() {
       if (!isClient) return;
       setIsPageLoading(true);
       try {
-        // Fetch only articles for the homepage list
         const fetchedArticles = await getAllNewsArticles();
-        // Ensure articles are sorted by date, descending (newest first)
         const sortedArticles = (Array.isArray(fetchedArticles) ? fetchedArticles : [])
-                                .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+          .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
         setArticles(sortedArticles);
 
-        // Gadget fetching logic removed from this component as UI is simplified
+        const sectionsToFetch: LayoutSection[] = [
+          'homepage-top',
+          'sidebar-left',
+          'sidebar-right',
+          'footer',
+          'header-logo-area',
+          'below-header',
+        ];
+        const gadgetFetchPromises = sectionsToFetch.map(section =>
+          getActiveGadgetsBySection(section)
+        );
+        const gadgetsBySectionArrays = await Promise.all(gadgetFetchPromises);
+
+        const newActiveGadgetsState: Partial<Record<LayoutSection, Gadget[]>> = {};
+        sectionsToFetch.forEach((section, index) => {
+          newActiveGadgetsState[section] = gadgetsBySectionArrays[index] || [];
+        });
+        setActiveGadgets(prev => ({...prev, ...newActiveGadgetsState}));
 
       } catch (error) {
-        console.error("Failed to fetch articles:", error);
-        toast({ title: "Error", description: "Failed to load page content.", variant: "destructive" });
+        console.error("Failed to fetch articles or gadgets:", error);
+        toast({ title: getUIText("error") || "Error", description: "Failed to load page content.", variant: "destructive" });
         setArticles([]);
       } finally {
         setIsPageLoading(false);
@@ -51,7 +75,7 @@ export default function HomePage() {
 
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, toast]); // Dependencies updated
+  }, [isClient, toast, getUIText]);
 
   const filteredArticles = useMemo(() => {
     const safeArticles = Array.isArray(articles) ? articles : [];
@@ -74,67 +98,138 @@ export default function HomePage() {
     setSelectedCategory(category);
   }, []);
 
-  // Gadget rendering function removed as it's not used in this simplified UI
-  // const renderGadgetsForSection = (section: LayoutSection, className?: string) => { ... };
+  const renderGadgetsForSection = (section: LayoutSection, className?: string) => {
+    const gadgets = activeGadgets[section] || [];
+    if (gadgets.length === 0) return null;
+    return (
+      <div className={`section-gadgets section-${section}-container ${className || ''} space-y-4`}>
+        {gadgets.map((gadget) => (
+          <AdDisplay key={gadget.id} gadget={gadget} />
+        ))}
+      </div>
+    );
+  };
 
-  // Simplified Page Skeleton for the reverted design
   const PageSkeleton = () => (
-     <div className="container mx-auto px-4 py-8">
-       {/* Category Filter Skeleton */}
-       <div className="mb-8 flex flex-wrap gap-2 justify-center">
-         {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-24 rounded-md" />)}
-       </div>
-       {/* News List Skeleton */}
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-         {[...Array(6)].map((_, i) => (
-           <div key={i} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
-             <Skeleton className="h-48 w-full rounded-xl" />
-             <div className="space-y-2 pt-2">
-               <Skeleton className="h-6 w-3/4" />
-               <Skeleton className="h-4 w-1/2" />
-               <Skeleton className="h-4 w-5/6" />
-             </div>
-             <Skeleton className="h-10 w-full rounded-md mt-auto" />
-           </div>
-         ))}
-       </div>
-     </div>
-   );
+    <div className="flex flex-col min-h-screen">
+      {/* Header Skeleton (simplified) */}
+      <Skeleton className="h-16 w-full mb-4 rounded-none" />
+      
+      {/* Top Gadget Skeleton */}
+      <div className="container mx-auto px-4">
+        <Skeleton className="h-24 w-full mb-6 rounded-md" />
+      </div>
+
+      <div className="container mx-auto px-4 flex-grow">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Left Sidebar Skeleton */}
+          <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-4">
+            <Skeleton className="h-48 w-full rounded-md" />
+            <Skeleton className="h-32 w-full rounded-md" />
+          </aside>
+
+          {/* Main Content Area Skeleton */}
+          <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
+            {/* Category Filter Skeleton */}
+            <div className="mb-8 flex flex-wrap gap-2 justify-center">
+              {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
+            </div>
+            {/* News List Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
+                  <Skeleton className="h-40 w-full rounded-xl" />
+                  <div className="space-y-2 pt-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-5/6" />
+                  </div>
+                  <Skeleton className="h-10 w-full rounded-md mt-auto" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Sidebar Skeleton */}
+          <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-4">
+            <Skeleton className="h-64 w-full rounded-md" />
+            <Skeleton className="h-40 w-full rounded-md" />
+          </aside>
+        </div>
+      </div>
+      {/* Footer Gadget & Footer Skeleton */}
+      <div className="container mx-auto px-4 mt-8">
+        <Skeleton className="h-24 w-full mb-6 rounded-md" />
+      </div>
+      <Skeleton className="h-16 w-full mt-4 rounded-none" />
+    </div>
+  );
 
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
-      {/* Header remains the same */}
-      {/* Gadget rendering logic removed from header area */}
+      {renderGadgetsForSection('header-logo-area', 'container mx-auto px-4 pt-4')}
       <Header onSearch={handleSearch} />
-      {/* Gadget rendering logic removed from below header area */}
+      {renderGadgetsForSection('below-header', 'container mx-auto px-4 pt-4')}
 
       <main className="flex-grow container mx-auto px-4 py-8">
         {isPageLoading ? (
           <PageSkeleton />
         ) : (
           <>
-             {/* Removed sidebar and complex layout structure */}
-             {/* Render CategoryFilter */}
-             <CategoryFilter
-               categories={allNewsCategories}
-               selectedCategory={selectedCategory}
-               onSelectCategory={handleSelectCategory}
-             />
-             {/* Render NewsList */}
-             {filteredArticles.length > 0 ? (
-               <NewsList articles={filteredArticles} />
-             ) : (
-               <p className="text-center text-muted-foreground mt-16 text-xl">
-                 {getUIText("noArticlesFound")}
-               </p>
-             )}
-           </>
+            {renderGadgetsForSection('homepage-top', 'mb-8')}
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Left Sidebar */}
+              <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-6">
+                {renderGadgetsForSection('sidebar-left')}
+                {activeGadgets['sidebar-left']?.length === 0 && (
+                  <Card className="p-4 bg-muted/30 hidden md:block"> {/* Hide placeholder on small screens if empty */}
+                    <CardHeader className="p-0 pb-2">
+                      <CardTitle className="text-sm text-muted-foreground">Left Sidebar</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </aside>
+
+              {/* Main Content Area */}
+              <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
+                <CategoryFilter
+                  categories={allNewsCategories}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={handleSelectCategory}
+                />
+                {filteredArticles.length > 0 ? (
+                  <NewsList articles={filteredArticles} />
+                ) : (
+                  <p className="text-center text-muted-foreground mt-16 text-xl">
+                    {getUIText("noArticlesFound")}
+                  </p>
+                )}
+              </div>
+
+              {/* Right Sidebar */}
+              <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-6">
+                {renderGadgetsForSection('sidebar-right')}
+                {activeGadgets['sidebar-right']?.length === 0 && (
+                   <Card className="p-4 bg-muted/30 hidden md:block"> {/* Hide placeholder on small screens if empty */}
+                     <CardHeader className="p-0 pb-2">
+                       <CardTitle className="text-sm text-muted-foreground">Right Sidebar</CardTitle>
+                     </CardHeader>
+                     <CardContent className="p-0">
+                       <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
+                     </CardContent>
+                   </Card>
+                )}
+              </aside>
+            </div>
+          </>
         )}
       </main>
 
-       {/* Footer remains the same */}
-       {/* Gadget rendering logic removed from footer area */}
+      {renderGadgetsForSection('footer', 'container mx-auto px-4 pt-8 pb-4')}
       <Footer />
     </div>
   );

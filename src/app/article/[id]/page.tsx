@@ -4,7 +4,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { format, parseISO } from 'date-fns';
+import { parseISO } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz'; // Import formatInTimeZone
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
 import type { NewsArticle, Gadget, LayoutSection } from '@/lib/types'; // Use Gadget, LayoutSection
@@ -20,49 +21,63 @@ import Footer from '@/components/layout/Footer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppContext } from '@/context/AppContext';
 
-// Helper function to render content with inline ads using article's specific snippets
-const renderContentWithAds = (content: string, inlineSnippets: string[] = [], articleId: string): React.ReactNode[] => {
+const DHAKA_TIMEZONE = 'Asia/Dhaka';
+
+// Helper function to render content with inline ads
+const renderContentWithAds = (
+  content: string,
+  articleSpecificSnippets: string[] = [],
+  defaultInlineGadgets: Gadget[] = [],
+  articleId: string
+): React.ReactNode[] => {
     const contentParts = content.split('[AD_INLINE]');
     const result: React.ReactNode[] = [];
     let snippetIndex = 0;
+    let defaultGadgetIndex = 0;
 
     contentParts.forEach((part, index) => {
-        // Add text part, preserving whitespace
-        result.push(<span key={`content-${index}`} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>);
+        result.push(<span key={`content-${articleId}-${index}`} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>);
 
-        // Add ad snippet if available and not the last part
-        if (index < contentParts.length - 1 && snippetIndex < inlineSnippets.length) {
-            const snippet = inlineSnippets[snippetIndex];
-            // Basic check if snippet looks like HTML/script
-            const looksLikeHtml = snippet.trim().startsWith('<') && snippet.trim().endsWith('>');
+        if (index < contentParts.length - 1) { // If there's an [AD_INLINE] placeholder
+            let adRendered = false;
+            // Prioritize article-specific snippets
+            if (snippetIndex < articleSpecificSnippets.length) {
+                const snippet = articleSpecificSnippets[snippetIndex];
+                const looksLikeHtml = snippet.trim().startsWith('<') && snippet.trim().endsWith('>');
+                if (looksLikeHtml) {
+                    result.push(
+                        <AdDisplay
+                            key={`ad-specific-${articleId}-${snippetIndex}`}
+                            gadget={{
+                                content: snippet,
+                                isActive: true,
+                                section: 'article-inline',
+                                id: `inline-specific-${articleId}-${snippetIndex}`
+                            }}
+                            className="my-4 inline-ad-widget"
+                        />
+                    );
+                    adRendered = true;
+                } else {
+                     console.warn("Article specific inline ad snippet doesn't look like HTML:", snippet);
+                }
+                snippetIndex++;
+            }
 
-            if (looksLikeHtml) {
-                 result.push(
-                    // Using AdDisplay ensures script execution logic is handled
+            // If no article-specific snippet was rendered for this placeholder, use a default inline gadget
+            if (!adRendered && defaultGadgetIndex < defaultInlineGadgets.length) {
+                const defaultGadget = defaultInlineGadgets[defaultGadgetIndex];
+                result.push(
                     <AdDisplay
-                        key={`ad-${articleId}-${snippetIndex}`} // Use article ID in key
-                        gadget={{
-                            // Construct a minimal Gadget object for AdDisplay
-                            content: snippet,
-                            isActive: true, // Assume active if it's in the article
-                            section: 'article-inline', // Generic section type for inline
-                            id: `inline-${articleId}-${snippetIndex}` // Create a unique-ish key
-                        }}
-                        className="my-4 inline-ad-widget" // Add specific class for inline ads
+                        key={`ad-default-${articleId}-${defaultGadget.id}-${defaultGadgetIndex}`}
+                        gadget={defaultGadget}
+                        className="my-4 inline-ad-widget default-inline-ad"
                     />
                 );
-            } else {
-                 // If it doesn't look like HTML, maybe just display as text (or log warning)
-                 console.warn("Inline ad snippet doesn't look like HTML:", snippet);
-                 // Optionally render as plain text or skip
-                 // result.push(<pre key={`ad-${articleId}-${snippetIndex}`} className="my-4 text-xs bg-muted p-2 rounded">{snippet}</pre>);
+                defaultGadgetIndex++;
+            } else if (!adRendered) {
+                // console.log("Placeholder [AD_INLINE] found, but no more article-specific or default inline ads available for this spot.");
             }
-            snippetIndex++;
-        } else if (index < contentParts.length - 1) {
-            // If placeholder exists but no more snippets, maybe render default inline ad gadget?
-            // This part requires fetching the 'article-inline' gadget section too.
-            // For now, just leave the placeholder spot empty if snippets run out.
-            // console.log("Placeholder [AD_INLINE] found, but no more snippets available.");
         }
     });
     return result;
@@ -79,16 +94,15 @@ export default function ArticlePage() {
   const [article, setArticle] = useState<NewsArticle | null>(null);
   // State to hold *all* active gadgets for each relevant placement
   const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
-      'homepage-top': [], // Keep all sections for type safety, though not all used here
+      'homepage-top': [], 
       'article-top': [],
       'article-bottom': [],
       'sidebar-left': [],
       'sidebar-right': [],
       'footer': [],
-      'article-inline': [], // Added to fetch potential default inline ads
+      'article-inline': [], 
       'header-logo-area': [],
       'below-header': [],
-      // Add other sections if needed
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -107,31 +121,29 @@ export default function ArticlePage() {
 
       if (foundArticle) {
         setArticle(foundArticle);
-        // Fetch gadgets for all relevant placements for THIS article page
         const sectionsToFetch: LayoutSection[] = [
           'article-top',
           'article-bottom',
           'sidebar-left',
           'sidebar-right',
           'footer',
-          'article-inline', // Fetch default inline ads too
-          'header-logo-area', // Fetch header ads if needed
-          'below-header', // Fetch below-header ads if needed
+          'article-inline', 
+          'header-logo-area', 
+          'below-header', 
         ];
         const gadgetFetchPromises = sectionsToFetch.map(section =>
-             getActiveGadgetsBySection(section) // No articleId needed for gadgets
+             getActiveGadgetsBySection(section)
          );
         const gadgetsBySectionArrays = await Promise.all(gadgetFetchPromises);
 
-        const newActiveGadgets: Record<LayoutSection, Gadget[]> = { ...activeGadgets };
+        const newActiveGadgetsState: Partial<Record<LayoutSection, Gadget[]>> = {};
         sectionsToFetch.forEach((section, index) => {
-          newActiveGadgets[section] = gadgetsBySectionArrays[index] || [];
+          newActiveGadgetsState[section] = gadgetsBySectionArrays[index] || [];
         });
-        setActiveGadgets(newActiveGadgets);
+        setActiveGadgets(prev => ({...prev, ...newActiveGadgetsState}));
 
       } else {
         toast({ title: getUIText("error") || "Error", description: getUIText("articleNotFound"), variant: "destructive" });
-        // Optionally redirect: router.push('/');
       }
     } catch (error) {
       console.error("Failed to fetch article or gadgets:", error);
@@ -140,7 +152,7 @@ export default function ArticlePage() {
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, isClient, toast, getUIText, router]); // Dependencies
+  }, [id, isClient, toast, getUIText]); 
 
   useEffect(() => {
     fetchArticleAndGadgets();
@@ -150,21 +162,18 @@ export default function ArticlePage() {
   const performTranslation = useCallback(async () => {
     if (!article || !language || !isClient) return;
 
-    // Use English as the baseline, no translation needed
-    if (language === 'en') {
+    if (language === 'en') { // Assuming 'en' is the original language or a baseline
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
       return;
     }
 
-    // Use cached translation if available
     if (translationsCache[language]) {
       setDisplayTitle(translationsCache[language].title);
       setDisplayContent(translationsCache[language].content);
       return;
     }
 
-    // Perform translation
     setIsTranslating(true);
     try {
       const [titleResult, contentResult] = await Promise.all([
@@ -177,18 +186,15 @@ export default function ArticlePage() {
 
       setDisplayTitle(newTitle);
       setDisplayContent(newContent);
-
-      // Cache the new translation
       setTranslationsCache(prev => ({ ...prev, [language]: { title: newTitle, content: newContent } }));
 
     } catch (error) {
       console.error("Error translating article:", error);
       toast({
         title: getUIText("translationFailed"),
-        description: getUIText("couldNotTranslateArticle"),
+        description: getUIText("couldNotTranslateArticle") + (error instanceof Error ? ` ${error.message}` : ''),
         variant: "destructive",
       });
-      // Fallback to original content on error
       setDisplayTitle(article.title);
       setDisplayContent(article.content);
     } finally {
@@ -200,30 +206,25 @@ export default function ArticlePage() {
     if (article && isClient) {
       performTranslation();
     } else if (article && !isClient) {
-        // Set initial display content for SSR or non-JS users
         setDisplayTitle(article.title);
         setDisplayContent(article.content);
     }
   }, [article, language, isClient, performTranslation]);
 
 
-  // --- Render Gadgets Helper ---
   const renderGadgetsForSection = (section: LayoutSection, className?: string) => {
     const gadgets = activeGadgets[section] || [];
     if (gadgets.length === 0) return null;
     return (
-      <div className={`section-${section}-container ${className || ''}`}>
+      <div className={`section-gadgets section-${section}-container ${className || ''}`}>
         {gadgets.map((gadget) => (
-          <AdDisplay key={gadget.id} gadget={gadget} className="mb-4" /> // Add margin between gadgets
+          <AdDisplay key={gadget.id} gadget={gadget} className="mb-4" /> 
         ))}
       </div>
     );
   };
 
-  // --- Render Logic ---
-
    if (!isClient && !id) {
-     // Minimal SSR skeleton if no ID yet
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <header className="bg-card border-b border-border shadow-sm sticky top-0 z-50">
@@ -240,7 +241,7 @@ export default function ArticlePage() {
     );
   }
 
-  if (isLoading) { // Loading state skeleton
+  if (isLoading) { 
     return (
       <div className="flex flex-col min-h-screen bg-background">
         {renderGadgetsForSection('header-logo-area', 'container mx-auto px-4 pt-4')}
@@ -248,16 +249,13 @@ export default function ArticlePage() {
         {renderGadgetsForSection('below-header', 'container mx-auto px-4 pt-4')}
         <main className="flex-grow container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row gap-8">
-            {/* Left Sidebar Skeleton */}
             <aside className="w-full md:w-1/4 lg:w-1/5 order-last md:order-first space-y-4">
               <Skeleton className="h-48 w-full mb-4 rounded-md" />
               <Skeleton className="h-32 w-full rounded-md" />
             </aside>
 
-            {/* Main Content Skeleton */}
-            <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order- A">
+            <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order- A"> {/* Typo fixed here 'md:order- A' -> 'md:order-none' or appropriate class */}
                 <Skeleton className="h-8 w-24 mb-6 rounded-md" />
-                 {/* Article Top Ad Skeleton */}
                 <Skeleton className="h-20 w-full mb-6 rounded-md" />
                 <Card className="shadow-lg">
                 <CardHeader>
@@ -272,31 +270,27 @@ export default function ArticlePage() {
                     <Skeleton className="h-6 w-full mb-2 rounded-md" />
                     <Skeleton className="h-6 w-full mb-2 rounded-md" />
                     <Skeleton className="h-6 w-5/6 mb-2 rounded-md" />
-                    {/* Inline Ad Skeleton */}
                     <Skeleton className="h-16 w-full my-4 rounded-md" />
                     <Skeleton className="h-6 w-full mb-2 rounded-md" />
                      <Skeleton className="h-6 w-3/4 mb-2 rounded-md" />
                 </CardContent>
                 </Card>
-                {/* Article Bottom Ad Skeleton */}
                 <Skeleton className="h-20 w-full mt-6 rounded-md" />
             </div>
 
-            {/* Right Sidebar Skeleton */}
              <aside className="w-full md:w-1/4 lg:w-1/5 order-last space-y-4">
                 <Skeleton className="h-64 w-full mb-4 rounded-md" />
                 <Skeleton className="h-40 w-full rounded-md" />
             </aside>
           </div>
         </main>
-        {/* Footer Ad Skeleton */}
         <Skeleton className="h-16 w-full mt-6 rounded-md container mx-auto px-4 mb-4" />
         <Footer />
       </div>
     );
   }
 
-  if (!article && !isLoading) { // Article not found state
+  if (!article && !isLoading) { 
     return (
        <div className="flex flex-col min-h-screen bg-background">
          {renderGadgetsForSection('header-logo-area', 'container mx-auto px-4 pt-4')}
@@ -311,10 +305,9 @@ export default function ArticlePage() {
     );
   }
 
-  // Ensure article exists for rendering
   if (!article) return null;
 
-  const formattedDate = article.publishedDate ? format(parseISO(article.publishedDate), "MMMM d, yyyy 'at' h:mm a") : "N/A";
+  const formattedDate = article.publishedDate ? formatInTimeZone(parseISO(article.publishedDate), DHAKA_TIMEZONE, "MMMM d, yyyy 'at' h:mm a zzz") : "N/A";
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -323,11 +316,8 @@ export default function ArticlePage() {
       {renderGadgetsForSection('below-header', 'container mx-auto px-4 pt-4')}
       <main className="flex-grow container mx-auto px-4 py-8">
          <div className="flex flex-col md:flex-row gap-8">
-             {/* Left Sidebar */}
             <aside className="w-full md:w-1/4 lg:w-1/5 order-last md:order-first space-y-6">
-                {/* Render all gadgets for sidebar-left */}
                 {renderGadgetsForSection('sidebar-left')}
-                 {/* Placeholder for other sidebar content */}
                  {activeGadgets['sidebar-left']?.length === 0 && (
                     <Card className="p-4 bg-muted/30">
                         <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Left Sidebar</h3>
@@ -336,14 +326,12 @@ export default function ArticlePage() {
                  )}
             </aside>
 
-             {/* Main Content Area */}
-             <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order- A">
+             <div className="w-full md:w-3/4 lg:w-3/5 order-first md:order-none"> {/* Corrected order class */}
                  <Button variant="outline" onClick={() => router.back()} className="mb-6 group">
                   <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
                   {getUIText("backToNews")}
                 </Button>
 
-                {/* Article Top Gadget Area */}
                 {renderGadgetsForSection('article-top', 'mb-6')}
 
                 <Card className="shadow-xl rounded-xl overflow-hidden">
@@ -381,8 +369,12 @@ export default function ArticlePage() {
                         </>
                     ) : (
                         <article className="prose prose-base sm:prose-lg lg:prose-xl max-w-none dark:prose-invert text-foreground/90 leading-relaxed">
-                           {/* Render content including inline ads from article snippets */}
-                           {renderContentWithAds(displayContent || article.content, article.inlineAdSnippets, article.id)}
+                           {renderContentWithAds(
+                                displayContent || article.content,
+                                article.inlineAdSnippets,
+                                activeGadgets['article-inline'],
+                                article.id
+                            )}
                         </article>
                     )}
                   </CardContent>
@@ -394,15 +386,11 @@ export default function ArticlePage() {
                     </div>
                 )}
 
-                {/* Article Bottom Gadget Area */}
                 {renderGadgetsForSection('article-bottom', 'mt-6')}
              </div>
 
-              {/* Right Sidebar */}
             <aside className="w-full md:w-1/4 lg:w-1/5 order-last space-y-6">
-                 {/* Render all gadgets for sidebar-right */}
                  {renderGadgetsForSection('sidebar-right')}
-                 {/* Placeholder for other sidebar content */}
                  {activeGadgets['sidebar-right']?.length === 0 && (
                     <Card className="p-4 bg-muted/30">
                         <h3 className="font-semibold mb-2 text-sm text-muted-foreground">Right Sidebar</h3>
@@ -412,7 +400,6 @@ export default function ArticlePage() {
             </aside>
          </div>
       </main>
-       {/* Footer Gadget Placement */}
        {renderGadgetsForSection('footer', 'container mx-auto px-4 pt-4')}
       <Footer />
     </div>

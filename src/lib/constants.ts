@@ -45,7 +45,7 @@ export const uiTexts: Record<string, Record<string, string>> = {
     translateContent: "Translate Content",
     showOriginal: "Show Original",
     footerReserved: "All rights reserved.",
-    footerPoweredBy: "Powered by Next.js & Generative AI",
+    footerPoweredBy: "Powered by Samay Barta Lite",
     theme: "Theme",
     lightTheme: "Light",
     darkTheme: "Dark",
@@ -58,6 +58,8 @@ export const uiTexts: Record<string, Record<string, string>> = {
     noArticlesFound: "No news articles found matching your criteria.",
     articleTitleLabel: "Title",
     articleContentLabel: "Content",
+    publishedDateLabel: "Published",
+    error: "Error",
   },
   bn: {
     appName: "সময় বার্তা লাইট",
@@ -82,7 +84,7 @@ export const uiTexts: Record<string, Record<string, string>> = {
     translateContent: "বিষয়বস্তু অনুবাদ করুন",
     showOriginal: "মূল দেখান",
     footerReserved: "সর্বস্বত্ব সংরক্ষিত।",
-    footerPoweredBy: "Next.js এবং জেনারেটিভ AI দ্বারা চালিত",
+    footerPoweredBy: "সময় বার্তা লাইট দ্বারা চালিত",
     theme: "থিম",
     lightTheme: "লাইট",
     darkTheme: "ডার্ক",
@@ -95,6 +97,8 @@ export const uiTexts: Record<string, Record<string, string>> = {
     noArticlesFound: "আপনার মানদণ্ডের সাথে মিলে যাওয়া কোনও সংবাদ নিবন্ধ পাওয়া যায়নি।",
     articleTitleLabel: "শিরোনাম",
     articleContentLabel: "বিষয়বস্তু",
+    publishedDateLabel: "প্রকাশিত",
+    error: "ত্রুটি",
   },
 };
 
@@ -173,3 +177,62 @@ export const initialSampleNewsArticles: NewsArticle[] = [
     dataAiHint: 'running track',
   },
 ];
+
+// Sample Gadgets (for initial seeding if needed, or for reference)
+// Note: In a real scenario, these would be managed via the Layout Editor in the admin panel.
+// export const initialSampleGadgets: Gadget[] = [
+//   {
+//     id: 'gadget-header-1',
+//     section: 'header-logo-area',
+//     title: 'Header Banner Ad',
+//     content: '<div style="width:100%; height:90px; background-color: #f0f0f0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Header Ad (e.g., 728x90)</div>',
+//     isActive: true,
+//     order: 1,
+//     createdAt: new Date().toISOString(),
+//   },
+//   {
+//     id: 'gadget-sidebar-left-1',
+//     section: 'sidebar-left',
+//     title: 'Left Sidebar Ad Unit 1',
+//     content: '<div style="width:100%; height:250px; background-color: #e0e0e0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc; margin-bottom: 10px;">Sidebar Ad 1 (e.g., 300x250)</div>',
+//     isActive: true,
+//     order: 1,
+//     createdAt: new Date().toISOString(),
+//   },
+//   {
+//     id: 'gadget-sidebar-left-2',
+//     section: 'sidebar-left',
+//     title: 'Left Sidebar Ad Unit 2',
+//     content: '<div style="width:100%; height:250px; background-color: #d0d0d0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Sidebar Ad 2 (e.g., 300x250)</div>',
+//     isActive: true,
+//     order: 2,
+//     createdAt: new Date().toISOString(),
+//   },
+//   {
+//     id: 'gadget-sidebar-right-1',
+//     section: 'sidebar-right',
+//     title: 'Right Sidebar Ad Unit',
+//     content: '<div style="width:100%; height:600px; background-color: #c0c0c0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc;">Tall Sidebar Ad (e.g., 300x600)</div>',
+//     isActive: true,
+//     order: 1,
+//     createdAt: new Date().toISOString(),
+//   },
+//   {
+//     id: 'gadget-footer-1',
+//     section: 'footer',
+//     title: 'Footer Banner Ad',
+//     content: '<div style="width:100%; height:90px; background-color: #b0b0b0; display:flex; align-items:center; justify-content:center; border: 1px solid #ccc; margin-top: 20px;">Footer Ad (e.g., 728x90)</div>',
+//     isActive: true,
+//     order: 1,
+//     createdAt: new Date().toISOString(),
+//   },
+//   {
+//     id: 'default-inline-ad',
+//     section: 'article-inline',
+//     title: 'Default Inline Article Ad',
+//     content: '<div style="width:100%; padding: 10px 0; margin: 15px 0; background-color: #f0ead6; text-align:center; border: 1px dashed #999;">Default Inline Ad Placeholder</div>',
+//     isActive: true,
+//     order: 1,
+//     createdAt: new Date().toISOString(),
+//   }
+// ];
