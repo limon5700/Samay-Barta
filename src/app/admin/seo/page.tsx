@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { BarChart3, Info, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { getSeoSettings, updateSeoSettings } from '@/lib/data'; // Use actual functions
+import { getSeoSettings, updateSeoSettings } from '@/lib/data'; 
 import type { SeoSettings, CreateSeoSettingsData } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
@@ -22,6 +22,7 @@ import {
   FormItem,
   FormMessage,
   FormDescription,
+  FormLabel, 
 } from "@/components/ui/form";
 
 
@@ -53,7 +54,7 @@ export default function SeoManagementPage() {
       metaKeywords: '',
       faviconUrl: '',
       ogSiteName: '',
-      ogLocale: '',
+      ogLocale: 'bn_BD', // Default to bn_BD as per general app context
       ogType: 'website',
       twitterCard: 'summary_large_image',
       twitterSite: '',
@@ -82,6 +83,7 @@ export default function SeoManagementPage() {
         }
       } catch (error) {
         toast({ title: "Error", description: "Failed to load SEO settings.", variant: "destructive" });
+        console.error("Error fetching SEO settings for form:", error);
       } finally {
         setIsLoading(false);
       }
@@ -99,24 +101,42 @@ export default function SeoManagementPage() {
       const result = await updateSeoSettings(updateData);
       if (result) {
         toast({ title: "Success", description: "SEO settings updated successfully." });
-        // Optionally re-fetch or update form.reset with new data from result
-        form.reset({
-            ...data, // Keep current form data
-            metaKeywords: (result.metaKeywords || []).join(', '), // Update keywords from result
+        form.reset({ // Re-initialize form with potentially updated (from DB) and current data
+            ...data, 
+            metaKeywords: (result.metaKeywords || []).join(', '), 
         });
       } else {
-        toast({ title: "Error", description: "Failed to update SEO settings. Result was null.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to update SEO settings. No result returned.", variant: "destructive" });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
       toast({ title: "Error", description: `Failed to update SEO settings: ${errorMessage}`, variant: "destructive" });
+      console.error("Error submitting SEO form:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
+  
+  const errorExplanation = (
+     <Card className="mb-6 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
+        <CardHeader>
+            <CardTitle className="text-lg text-yellow-800 dark:text-yellow-300">Note on Console Errors & Page Display</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-yellow-700 dark:text-yellow-200 space-y-2">
+            <p>
+                If you see errors in your browser's developer console related to <code>extensions.aitopia.ai</code> or similar domains not controlled by this application, these are likely caused by a browser extension you have installed. These errors are not part of Samay Barta Lite and can usually be ignored or resolved by managing your browser extensions.
+            </p>
+            <p>
+                If this SEO Management page appears blank or doesn't load correctly, and there are no errors in the console directly related to <code>seo/page.tsx</code> or <code>lib/data.ts</code>, the issue might still be due to browser extension interference or a network problem preventing data loading. Please check for other console errors that are not from third-party extensions.
+            </p>
+        </CardContent>
+     </Card>
+  );
+
 
   return (
     <div className="container mx-auto py-8">
+      {errorExplanation}
       <Card className="shadow-lg rounded-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
@@ -279,7 +299,7 @@ export default function SeoManagementPage() {
                     />
                 </div>
                 
-                <Button type="submit" disabled={isLoading || isSubmitting} className="w-full md:w-auto">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">
                     {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : "Save SEO Settings"}
                 </Button>
             </form>
@@ -290,3 +310,4 @@ export default function SeoManagementPage() {
     </div>
   );
 }
+
