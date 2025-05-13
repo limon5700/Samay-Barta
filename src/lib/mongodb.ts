@@ -10,9 +10,7 @@ if (!MONGODB_URI) {
 }
 
 // Basic check for common placeholders to prevent EBADNAME errors
-// Commenting out this check as per user request to bypass the specific error.
-// The user needs to ensure their MONGODB_URI is correctly set.
-/*
+// Uncommented this check to provide a more specific error if placeholders are still present.
 if (MONGODB_URI.includes('<username>') || MONGODB_URI.includes('<password>') || MONGODB_URI.includes('<cluster-url>') || MONGODB_URI.includes('<dbname>')) {
   console.error("ERROR: MONGODB_URI in your .env file seems to contain placeholder values like <username>, <password>, <cluster-url>, or <dbname>.");
   console.error("Please replace these placeholders with your actual MongoDB credentials and cluster information.");
@@ -21,7 +19,6 @@ if (MONGODB_URI.includes('<username>') || MONGODB_URI.includes('<password>') || 
     'MONGODB_URI contains placeholder values. Please update your .env file with actual credentials and ensure no angle brackets <> remain.'
   );
 }
-*/
 
 
 if (!MONGODB_URI.startsWith('mongodb://') && !MONGODB_URI.startsWith('mongodb+srv://')) {
