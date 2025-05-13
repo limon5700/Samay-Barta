@@ -109,15 +109,15 @@ export default function HomePage() {
       <div className="container mx-auto px-4"><Skeleton className="h-24 w-full mb-6 rounded-md" /></div>
       <div className="container mx-auto px-4 flex-grow">
         <div className="flex flex-col md:flex-row gap-8">
-          <aside className="w-full md:w-1/5 lg:w-[15%] order-2 md:order-1 space-y-4">
+          <aside className="w-full md:w-1/6 lg:w-1/8 order-2 md:order-1 space-y-4">
             <Skeleton className="h-48 w-full rounded-md" /> <Skeleton className="h-32 w-full rounded-md" />
           </aside>
-          <div className="w-full md:w-3/5 lg:w-[70%] order-1 md:order-2">
+          <div className="w-full md:w-4/6 lg:w-6/8 order-1 md:order-2"> {/* Adjusted skeleton width */}
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Ensure 4 columns for skeleton too */}
-              {[...Array(8)].map((_, i) => ( // Display 8 skeletons for a 4-column layout to show 2 rows
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => ( 
                 <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                   <Skeleton className="h-40 w-full rounded-xl" />
                   <div className="space-y-2 pt-2">
@@ -128,7 +128,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <aside className="w-full md:w-1/5 lg:w-[15%] order-3 md:order-3 space-y-4">
+          <aside className="w-full md:w-1/6 lg:w-1/8 order-3 md:order-3 space-y-4">
             <Skeleton className="h-64 w-full rounded-md" /> <Skeleton className="h-40 w-full rounded-md" />
           </aside>
         </div>
@@ -152,7 +152,7 @@ export default function HomePage() {
           <>
             {renderGadgetsForSection('homepage-top', 'mb-8')}
             <div className="flex flex-col md:flex-row gap-8">
-              <aside className="w-full md:w-1/5 lg:w-[15%] order-2 md:order-1 space-y-6">
+              <aside className="w-full md:w-1/6 lg:w-1/8 order-2 md:order-1 space-y-6">
                 {renderGadgetsForSection('sidebar-left')}
                 {activeGadgets['sidebar-left']?.length === 0 && (
                   <Card className="p-4 bg-muted/30 hidden md:block">
@@ -161,19 +161,19 @@ export default function HomePage() {
                   </Card>
                 )}
               </aside>
-              <div className="w-full md:w-3/5 lg:w-[70%] order-1 md:order-2">
+              <div className="w-full md:w-4/6 lg:w-6/8 order-1 md:order-2"> {/* Adjusted main content width */}
                 <CategoryFilter categories={allNewsCategories} selectedCategory={selectedCategory} onSelectCategory={handleSelectCategory} />
                 {filteredArticles.length > 0 ? (
                   <NewsList 
                     articles={filteredArticles} 
                     interstitialGadgets={activeGadgets['homepage-article-interstitial']} 
-                    adsAfterEvery={2} // Ad after every 2 articles
+                    adsAfterEvery={2} 
                   />
                 ) : (
                   <p className="text-center text-muted-foreground mt-16 text-xl">{getUIText("noArticlesFound")}</p>
                 )}
               </div>
-              <aside className="w-full md:w-1/5 lg:w-[15%] order-3 md:order-3 space-y-6">
+              <aside className="w-full md:w-1/6 lg:w-1/8 order-3 md:order-3 space-y-6">
                 {renderGadgetsForSection('sidebar-right')}
                  {activeGadgets['sidebar-right']?.length === 0 && (
                    <Card className="p-4 bg-muted/30 hidden md:block">
