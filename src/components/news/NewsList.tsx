@@ -32,7 +32,7 @@ export default function NewsList({ articles, interstitialGadgets, adsAfterEvery 
   });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Ensures 4 columns on large screens */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Ensures 3 columns on large screens for wider cards */}
       {itemsToRender.map((item) => {
         if (item.type === 'article') {
           // NewsCard will naturally fit into one column of the grid
@@ -40,8 +40,9 @@ export default function NewsList({ articles, interstitialGadgets, adsAfterEvery 
         }
         if (item.type === 'ad') {
           // Ad container spans full width of the grid at all breakpoints
+          // For a 3-column layout, col-span-3 makes it full width. For sm: 2-cols, col-span-2. For default 1-col, col-span-1.
           return (
-            <div key={item.id} className="col-span-1 md:col-span-2 lg:col-span-4 my-4 interstitial-ad-item">
+            <div key={item.id} className="col-span-1 sm:col-span-2 lg:col-span-3 my-4 interstitial-ad-item">
               <AdDisplay gadget={item.data as Gadget} />
             </div>
           );
@@ -51,4 +52,3 @@ export default function NewsList({ articles, interstitialGadgets, adsAfterEvery 
     </div>
   );
 }
-
