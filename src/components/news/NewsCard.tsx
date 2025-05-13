@@ -40,7 +40,7 @@ export default function NewsCard({ article }: NewsCardProps) {
     return (
       <Card className="flex flex-col h-full overflow-hidden shadow-lg rounded-lg">
         {article.imageUrl && (
-          <div className="relative w-full h-48">
+          <div className="relative w-full aspect-video"> {/* Changed h-48 to aspect-video */}
             <Image
               src={article.imageUrl}
               alt={article.title}
@@ -61,7 +61,7 @@ export default function NewsCard({ article }: NewsCardProps) {
           </div>
         </CardHeader>
         <CardContent className="flex-grow">
-          <CardDescription className="text-sm text-foreground/80">{article.excerpt || ''}</CardDescription>
+          <CardDescription className="text-sm text-foreground/80 line-clamp-3">{article.excerpt || ''}</CardDescription> {/* Added line-clamp-3 for consistency */}
         </CardContent>
         <CardFooter>
           <Button asChild variant="default" size="sm" className="w-full" disabled>
@@ -98,7 +98,7 @@ export default function NewsCard({ article }: NewsCardProps) {
   return (
     <Card className="flex flex-col h-full overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 ease-in-out rounded-lg">
       {article.imageUrl && (
-        <div className="relative w-full h-48">
+        <div className="relative w-full aspect-video"> {/* Changed h-48 to aspect-video */}
           <Image
             src={article.imageUrl}
             alt={displayTitle}
@@ -109,7 +109,7 @@ export default function NewsCard({ article }: NewsCardProps) {
         </div>
       )}
       <CardHeader>
-        <CardTitle className="text-xl leading-tight mb-1">{displayTitle}</CardTitle>
+        <CardTitle className="text-xl leading-tight mb-1 line-clamp-2">{displayTitle}</CardTitle> {/* Added line-clamp-2 for title consistency */}
         <div className="flex items-center text-xs text-muted-foreground space-x-2">
           <Badge variant="secondary" className="text-xs">{article.category}</Badge>
           <div className="flex items-center">
@@ -119,7 +119,7 @@ export default function NewsCard({ article }: NewsCardProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        <CardDescription className="text-sm text-foreground/80">{displayExcerpt}</CardDescription>
+        <CardDescription className="text-sm text-foreground/80 line-clamp-3">{displayExcerpt}</CardDescription> {/* Added line-clamp-3 for consistency */}
       </CardContent>
       <CardFooter>
         <Button
@@ -138,3 +138,4 @@ export default function NewsCard({ article }: NewsCardProps) {
     </Card>
   );
 }
+

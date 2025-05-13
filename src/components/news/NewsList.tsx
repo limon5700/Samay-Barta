@@ -32,7 +32,7 @@ export default function NewsList({ articles, interstitialGadgets, adsAfterEvery 
   });
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Ensures 3 columns on large screens for wider cards */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Ensures 3 columns on large screens and up */}
       {itemsToRender.map((item) => {
         if (item.type === 'article') {
           // NewsCard will naturally fit into one column of the grid
@@ -52,3 +52,4 @@ export default function NewsList({ articles, interstitialGadgets, adsAfterEvery 
     </div>
   );
 }
+
