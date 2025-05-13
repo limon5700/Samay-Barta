@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { BarChart3, Info, Loader2 } from "lucide-react";
+import { BarChart3, Info, Loader2, Youtube, Facebook, Link as LinkIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getSeoSettings, updateSeoSettings } from '@/lib/data'; 
 import type { SeoSettings, CreateSeoSettingsData } from '@/lib/types';
@@ -37,6 +37,10 @@ const seoFormSchema = z.object({
   twitterCard: z.enum(["summary", "summary_large_image", "app", "player"]).optional().or(z.literal('')),
   twitterSite: z.string().regex(/^@?(\w){1,15}$/, "Must be a valid Twitter handle, e.g., @username").optional().or(z.literal('')),
   twitterCreator: z.string().regex(/^@?(\w){1,15}$/, "Must be a valid Twitter handle, e.g., @username").optional().or(z.literal('')),
+  // Footer social links
+  footerYoutubeUrl: z.string().url("Must be a valid YouTube URL.").optional().or(z.literal('')),
+  footerFacebookUrl: z.string().url("Must be a valid Facebook URL.").optional().or(z.literal('')),
+  footerMoreLinksUrl: z.string().url("Must be a valid URL for 'More Links'.").optional().or(z.literal('')),
 });
 
 type SeoFormData = z.infer<typeof seoFormSchema>;
@@ -54,11 +58,14 @@ export default function SeoManagementPage() {
       metaKeywords: '',
       faviconUrl: '',
       ogSiteName: '',
-      ogLocale: 'bn_BD', // Default to bn_BD as per general app context
+      ogLocale: 'bn_BD', 
       ogType: 'website',
       twitterCard: 'summary_large_image',
       twitterSite: '',
       twitterCreator: '',
+      footerYoutubeUrl: '',
+      footerFacebookUrl: '',
+      footerMoreLinksUrl: '',
     }
   });
 
@@ -79,6 +86,9 @@ export default function SeoManagementPage() {
             twitterCard: currentSettings.twitterCard as any || 'summary_large_image',
             twitterSite: currentSettings.twitterSite || '',
             twitterCreator: currentSettings.twitterCreator || '',
+            footerYoutubeUrl: currentSettings.footerYoutubeUrl || '',
+            footerFacebookUrl: currentSettings.footerFacebookUrl || '',
+            footerMoreLinksUrl: currentSettings.footerMoreLinksUrl || '',
           });
         }
       } catch (error) {
@@ -101,7 +111,7 @@ export default function SeoManagementPage() {
       const result = await updateSeoSettings(updateData);
       if (result) {
         toast({ title: "Success", description: "SEO settings updated successfully." });
-        form.reset({ // Re-initialize form with potentially updated (from DB) and current data
+        form.reset({ 
             ...data, 
             metaKeywords: (result.metaKeywords || []).join(', '), 
         });
@@ -182,7 +192,7 @@ export default function SeoManagementPage() {
                             <FormItem>
                                 <FormLabel>Favicon URL</FormLabel>
                                 <FormControl><Input placeholder="/favicon.ico or https://example.com/icon.png" {...field} /></FormControl>
-                                 <FormDescription>URL to your site's favicon.</FormDescription>
+                                 <FormDescription>URL to your site's favicon. This icon appears in browser tabs.</FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -293,6 +303,46 @@ export default function SeoManagementPage() {
                                 <FormLabel>Twitter Creator Handle (Optional)</FormLabel>
                                 <FormControl><Input placeholder="@AuthorTwitter" {...field} /></FormControl>
                                 <FormDescription>Default author Twitter username (if applicable).</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+
+                <h3 className="text-lg font-semibold pt-4 border-t mt-6">Footer Social Links</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <FormField
+                        control={form.control}
+                        name="footerYoutubeUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-1"><Youtube className="h-4 w-4"/>YouTube URL</FormLabel>
+                                <FormControl><Input type="url" placeholder="https://youtube.com/yourchannel" {...field} /></FormControl>
+                                <FormDescription>Link to your YouTube channel for the site footer.</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="footerFacebookUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-1"><Facebook className="h-4 w-4"/>Facebook URL</FormLabel>
+                                <FormControl><Input type="url" placeholder="https://facebook.com/yourpage" {...field} /></FormControl>
+                                <FormDescription>Link to your Facebook page for the site footer.</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="footerMoreLinksUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-1"><LinkIcon className="h-4 w-4"/>More Links URL</FormLabel>
+                                <FormControl><Input type="url" placeholder="https://example.com/social" {...field} /></FormControl>
+                                <FormDescription>A general link for "More" in the site footer (e.g., a social hub page).</FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}

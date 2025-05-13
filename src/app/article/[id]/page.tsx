@@ -2,14 +2,13 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
-// Removed: import type { Metadata, ResolvingMetadata } from 'next';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Youtube, Facebook, Link as LinkIcon } from 'lucide-react'; // Added social icons
 
-import type { NewsArticle, Gadget, LayoutSection } from '@/lib/types';
+import type { NewsArticle, Gadget, LayoutSection, SeoSettings } from '@/lib/types';
 import { getArticleById, getActiveGadgetsBySection, getSeoSettings } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,8 +46,8 @@ const renderContentWithAds = (
                         gadget={{
                             content: snippet,
                             isActive: true,
-                            section: 'article-inline', // This is a conceptual section for these ads
-                            id: `inline-specific-${articleId}-${snippetIndex}` // Unique key
+                            section: 'article-inline', 
+                            id: `inline-specific-${articleId}-${snippetIndex}` 
                         }}
                         className="my-4 inline-ad-widget"
                     />
@@ -66,14 +65,13 @@ const renderContentWithAds = (
                         className="my-4 inline-ad-widget default-inline-ad"
                     />
                 );
-                defaultGadgetIndex = (defaultGadgetIndex + 1) % defaultInlineGadgets.length; // Cycle through default ads
+                defaultGadgetIndex = (defaultGadgetIndex + 1) % defaultInlineGadgets.length; 
                 adRendered = true;
             }
              if (!adRendered) {
-                // Optional: render a placeholder or nothing if no ad is available for this slot
                 // console.warn("No ad available for [AD_INLINE] placeholder:", index);
             }
-        } else if (part) { // Ensure part is not empty
+        } else if (part) { 
             result.push(<span key={`content-${articleId}-${index}`} dangerouslySetInnerHTML={{ __html: part.replace(/\n/g, '<br />') }} />);
         }
     });
@@ -84,58 +82,6 @@ type Props = {
   params: { id: string };
   searchParams: { [key: string]: string | string[] | undefined };
 };
-
-// Generate dynamic metadata - REMOVED as it's not allowed in client components
-// export async function generateMetadata(
-//   { params }: Props,
-//   parent: ResolvingMetadata
-// ): Promise<Metadata> {
-//   const id = params.id;
-//   const article = await getArticleById(id);
-//   const globalSeo = await getSeoSettings();
-//   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
-
-//   if (!article) {
-//     return {
-//       title: 'Article Not Found',
-//       description: 'The article you are looking for could not be found.',
-//     };
-//   }
-
-//   const title = article.metaTitle || article.title;
-//   const description = article.metaDescription || article.excerpt;
-//   const ogTitle = article.ogTitle || title;
-//   const ogDescription = article.ogDescription || description;
-//   const ogImage = article.ogImage || article.imageUrl || `${siteUrl}/og-image.png`; // Fallback to article image, then global
-//   const canonicalUrl = article.canonicalUrl || `${siteUrl}/article/${article.id}`;
-
-//   return {
-//     title: title,
-//     description: description,
-//     keywords: article.metaKeywords && article.metaKeywords.length > 0 ? article.metaKeywords : globalSeo?.metaKeywords,
-//     alternates: {
-//       canonical: canonicalUrl,
-//     },
-//     openGraph: {
-//       title: ogTitle,
-//       description: ogDescription,
-//       url: canonicalUrl,
-//       type: 'article',
-//       publishedTime: article.publishedDate,
-//       images: ogImage ? [{ url: ogImage, alt: ogTitle }] : undefined,
-//       siteName: globalSeo?.ogSiteName || 'Samay Barta Lite',
-//       locale: globalSeo?.ogLocale || 'bn_BD',
-//     },
-//     twitter: {
-//       card: globalSeo?.twitterCard as "summary" | "summary_large_image" | "app" | "player" || 'summary_large_image',
-//       title: ogTitle,
-//       description: ogDescription,
-//       images: ogImage ? [ogImage] : undefined,
-//       site: globalSeo?.twitterSite,
-//       creator: globalSeo?.twitterCreator,
-//     },
-//   };
-// }
 
 
 export default function ArticlePage() {
@@ -151,6 +97,7 @@ export default function ArticlePage() {
       'article-top': [], 'article-bottom': [], 'sidebar-left': [], 'sidebar-right': [],
       'footer': [], 'article-inline': [], 'header-logo-area': [], 'below-header': [],
   });
+  const [globalSeoSettings, setGlobalSeoSettings] = useState<SeoSettings | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -162,11 +109,17 @@ export default function ArticlePage() {
     if (!id || !isClient) return;
     setIsLoading(true);
     try {
-      const foundArticle = await getArticleById(id);
+      const [foundArticle, seoSettings] = await Promise.all([
+        getArticleById(id),
+        getSeoSettings()
+      ]);
+      
+      setGlobalSeoSettings(seoSettings);
+
       if (foundArticle) {
         setArticle(foundArticle);
-        setDisplayTitle(foundArticle.title); // Set initial display title
-        setDisplayContent(foundArticle.content); // Set initial display content
+        setDisplayTitle(foundArticle.title); 
+        setDisplayContent(foundArticle.content); 
 
         const sectionsToFetch: LayoutSection[] = [
           'article-top', 'article-bottom', 'sidebar-left', 'sidebar-right',
@@ -183,11 +136,11 @@ export default function ArticlePage() {
 
       } else {
         toast({ title: getUIText("error") || "Error", description: getUIText("articleNotFound"), variant: "destructive" });
-        router.push('/'); // Redirect if article not found
+        router.push('/'); 
       }
     } catch (error) {
-      console.error("Failed to fetch article or gadgets:", error);
-      toast({ title: getUIText("error") || "Error", description: "Failed to load article details or ads.", variant: "destructive" });
+      console.error("Failed to fetch article, SEO settings or gadgets:", error);
+      toast({ title: getUIText("error") || "Error", description: "Failed to load article details, settings or ads.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -231,8 +184,8 @@ export default function ArticlePage() {
         description: getUIText("couldNotTranslateArticle") + (error instanceof Error ? ` ${error.message}` : ''),
         variant: "destructive",
       });
-      setDisplayTitle(article.title); // Fallback to original
-      setDisplayContent(article.content); // Fallback to original
+      setDisplayTitle(article.title); 
+      setDisplayContent(article.content); 
     } finally {
       setIsTranslating(false);
     }
@@ -260,7 +213,7 @@ export default function ArticlePage() {
   };
 
   const JsonLd = () => {
-    if (!article) return null;
+    if (!article || !globalSeoSettings) return null;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
     const schema = {
       "@context": "https://schema.org",
@@ -269,24 +222,24 @@ export default function ArticlePage() {
         "@type": "WebPage",
         "@id": article.canonicalUrl || `${siteUrl}/article/${article.id}`
       },
-      "headline": article.title,
-      "image": article.imageUrl ? [article.imageUrl] : undefined,
+      "headline": article.metaTitle || article.title,
+      "image": article.ogImage || article.imageUrl ? [article.ogImage || article.imageUrl] : undefined,
       "datePublished": article.publishedDate,
-      "dateModified": article.publishedDate, // Assuming same for now, can be updated if articles have modified dates
+      "dateModified": article.publishedDate, 
       "author": {
-        "@type": "Organization", // Or "Person" if you have author data
-        "name": "Samay Barta Lite" // Replace with actual author or org name
+        "@type": "Organization", 
+        "name": globalSeoSettings.ogSiteName || "Samay Barta Lite"
       },
       "publisher": {
         "@type": "Organization",
-        "name": "Samay Barta Lite",
+        "name": globalSeoSettings.ogSiteName || "Samay Barta Lite",
         "logo": {
           "@type": "ImageObject",
-          "url": `${siteUrl}/logo.png` // Ensure you have a logo.png in /public
+          "url": `${siteUrl}/logo.png` 
         }
       },
-      "description": article.excerpt,
-      "articleBody": article.content.substring(0, 2500) + "..." // Truncate for sanity
+      "description": article.metaDescription || article.excerpt,
+      "articleBody": article.content.substring(0, 2500) + "..." 
     };
     return (
       <script
@@ -300,12 +253,11 @@ export default function ArticlePage() {
    if (!isClient && !id) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
-         {/* Basic Header Skeleton */}
         <Skeleton className="h-16 w-full" />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </main>
-        <Skeleton className="h-16 w-full" /> {/* Basic Footer Skeleton */}
+        <Skeleton className="h-16 w-full" /> 
       </div>
     );
   }
@@ -357,7 +309,7 @@ export default function ArticlePage() {
     );
   }
 
-  if (!article) return null; // Should be caught by above conditions but good for type safety
+  if (!article) return null; 
 
   const formattedDate = article.publishedDate ? formatInTimeZone(parseISO(article.publishedDate), DHAKA_TIMEZONE, "MMMM d, yyyy 'at' h:mm a zzz") : "N/A";
 
@@ -392,10 +344,28 @@ export default function ArticlePage() {
                           {displayTitle || article.title}
                           </CardTitle>
                       )}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground mb-4">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground mb-2">
                         <Badge variant="secondary" className="text-md px-3 py-1">{article.category}</Badge>
                         <span>{isClient ? getUIText("publishedDateLabel") || "Published" : "Published"}: {formattedDate}</span>
                       </div>
+                       {/* Article specific social links */}
+                        <div className="flex items-center gap-3 mt-2">
+                            {article.articleYoutubeUrl && (
+                                <a href={article.articleYoutubeUrl} target="_blank" rel="noopener noreferrer" aria-label="Article YouTube Link" className="text-muted-foreground hover:text-primary transition-colors">
+                                    <Youtube className="h-5 w-5" />
+                                </a>
+                            )}
+                            {article.articleFacebookUrl && (
+                                <a href={article.articleFacebookUrl} target="_blank" rel="noopener noreferrer" aria-label="Article Facebook Link" className="text-muted-foreground hover:text-primary transition-colors">
+                                    <Facebook className="h-5 w-5" />
+                                </a>
+                            )}
+                            {article.articleMoreLinksUrl && (
+                                <a href={article.articleMoreLinksUrl} target="_blank" rel="noopener noreferrer" aria-label="More Article Links" className="text-muted-foreground hover:text-primary transition-colors">
+                                    <LinkIcon className="h-5 w-5" />
+                                </a>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="p-6 pt-0">
                       {isTranslating && !displayContent ? (
@@ -427,4 +397,3 @@ export default function ArticlePage() {
     </>
   );
 }
-

@@ -28,7 +28,7 @@ import type { NewsArticle, Category, CreateNewsArticleData } from "@/lib/types";
 import { categories as allNewsCategories } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, Youtube, Facebook, Link as LinkIcon } from "lucide-react";
 
 const articleFormSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters." }).max(150),
@@ -47,6 +47,11 @@ const articleFormSchema = z.object({
   ogDescription: z.string().max(200).optional().or(z.literal('')), // OG descriptions can be a bit longer
   ogImage: z.string().url("Must be a valid URL for OG image.").optional().or(z.literal('')),
   canonicalUrl: z.string().url("Must be a valid canonical URL.").optional().or(z.literal('')),
+
+  // Article-specific social links
+  articleYoutubeUrl: z.string().url("Must be a valid YouTube URL.").optional().or(z.literal('')),
+  articleFacebookUrl: z.string().url("Must be a valid Facebook URL.").optional().or(z.literal('')),
+  articleMoreLinksUrl: z.string().url("Must be a valid URL for 'More Links'.").optional().or(z.literal('')),
 });
 
 export type ArticleFormData = z.infer<typeof articleFormSchema>;
@@ -81,6 +86,10 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
       ogDescription: article?.ogDescription || "",
       ogImage: article?.ogImage || "",
       canonicalUrl: article?.canonicalUrl || "",
+      // Article-specific social links
+      articleYoutubeUrl: article?.articleYoutubeUrl || "",
+      articleFacebookUrl: article?.articleFacebookUrl || "",
+      articleMoreLinksUrl: article?.articleMoreLinksUrl || "",
     },
   });
 
@@ -135,6 +144,10 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
         ogDescription: data.ogDescription || undefined,
         ogImage: data.ogImage || undefined,
         canonicalUrl: data.canonicalUrl || undefined,
+        // Article-specific social links
+        articleYoutubeUrl: data.articleYoutubeUrl || undefined,
+        articleFacebookUrl: data.articleFacebookUrl || undefined,
+        articleMoreLinksUrl: data.articleMoreLinksUrl || undefined,
     };
     onSubmit(finalData);
   };
@@ -326,6 +339,54 @@ export default function ArticleForm({ article, onSubmit, onCancel, isSubmitting 
                     <FormLabel>Canonical URL</FormLabel>
                     <FormControl><Input type="url" placeholder="https://example.com/original-article-url" {...field} /></FormControl>
                     <FormDescription>If this article is a reprint or syndicated, specify the original URL.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="article-social-links">
+            <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                <div className="flex items-center gap-2">
+                    <LinkIcon className="h-5 w-5" /> Article-Specific Social Links (Optional)
+                </div>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-6 pt-4">
+                 <p className="text-sm text-muted-foreground">
+                Provide links related to this article for display on the article page (e.g., a relevant YouTube video).
+              </p>
+               <FormField
+                control={form.control}
+                name="articleYoutubeUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1"><Youtube className="h-4 w-4"/>YouTube URL</FormLabel>
+                    <FormControl><Input type="url" placeholder="https://youtube.com/watch?v=relevantvideo" {...field} /></FormControl>
+                    <FormDescription>A YouTube link specifically for this article.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="articleFacebookUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1"><Facebook className="h-4 w-4"/>Facebook Post/Page URL</FormLabel>
+                    <FormControl><Input type="url" placeholder="https://facebook.com/relevantpost" {...field} /></FormControl>
+                    <FormDescription>A Facebook link specifically for this article.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="articleMoreLinksUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1"><LinkIcon className="h-4 w-4"/>More Related Links URL</FormLabel>
+                    <FormControl><Input type="url" placeholder="https://example.com/related-resource" {...field} /></FormControl>
+                    <FormDescription>Another relevant link for this article.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

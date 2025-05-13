@@ -5,11 +5,11 @@ import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AppProvider } from '@/context/AppContext';
-import { getSeoSettings } from '@/lib/data'; // Import SEO settings fetcher
+import { getSeoSettings } from '@/lib/data'; 
 
 export async function generateMetadata(): Promise<Metadata> {
   const seoSettings = await getSeoSettings();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002'; // Fallback for local
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002'; 
 
   const title = seoSettings?.siteTitle || 'সময় বার্তা লাইট | Samay Barta Lite';
   const description = seoSettings?.metaDescription || 'Your concise news source, powered by AI.';
@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase,
     title: {
       default: title,
-      template: `%s | ${title}`, // For child pages to append their title
+      template: `%s | ${title}`, 
     },
     description: description,
     keywords: seoSettings?.metaKeywords || ['news', 'bangla news', 'ai news', 'latest news', 'technology', 'sports'],
@@ -31,9 +31,9 @@ export async function generateMetadata(): Promise<Metadata> {
       canonical: '/',
     },
     icons: {
-      icon: seoSettings?.faviconUrl || '/favicon.ico', // Default favicon path
+      icon: seoSettings?.faviconUrl || '/favicon.ico', 
       shortcut: seoSettings?.faviconUrl || '/favicon.ico',
-      apple: '/apple-touch-icon.png', // Example, ensure you have this
+      apple: '/apple-touch-icon.png', 
     },
     openGraph: {
       title: title,
@@ -42,7 +42,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: seoSettings?.ogSiteName || title,
       images: [
         {
-          url: `${siteUrl}/og-image.png`, // Default OG image, ensure you have this in /public
+          url: `${siteUrl}/og-image.png`, 
           width: 1200,
           height: 630,
           alt: title,
@@ -55,31 +55,31 @@ export async function generateMetadata(): Promise<Metadata> {
       card: (seoSettings?.twitterCard as "summary" | "summary_large_image" | "app" | "player") || 'summary_large_image',
       title: title,
       description: description,
-      site: seoSettings?.twitterSite, // e.g., @YourTwitterHandle
-      creator: seoSettings?.twitterCreator, // e.g., @CreatorTwitterHandle
-      images: [`${siteUrl}/twitter-image.png`], // Default Twitter image, ensure you have this
+      site: seoSettings?.twitterSite, 
+      creator: seoSettings?.twitterCreator, 
+      images: [`${siteUrl}/twitter-image.png`], 
     },
-    robots: { // Basic robots directives
+    robots: { 
       index: true,
       follow: true,
-      nocache: true, // Consider removing nocache for production for better caching
+      nocache: true, 
       googleBot: {
         index: true,
         follow: true,
-        noimageindex: false, // Allow image indexing
+        noimageindex: false, 
         'max-video-preview': -1,
         'max-image-preview': 'large',
         'max-snippet': -1,
       },
     },
-    // manifest: `${siteUrl}/site.webmanifest`, // If you have a manifest file
+    // manifest: `${siteUrl}/site.webmanifest`, 
   };
 }
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' }, // Match --background light
-    { media: '(prefers-color-scheme: dark)', color: '#262b33' },  // Match --background dark (approx 210 10% 15%)
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' }, 
+    { media: '(prefers-color-scheme: dark)', color: '#262b33' },  
   ],
   colorScheme: 'light dark',
 }

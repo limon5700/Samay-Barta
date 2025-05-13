@@ -31,6 +31,10 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     ogDescription: doc.ogDescription,
     ogImage: doc.ogImage,
     canonicalUrl: doc.canonicalUrl,
+    // Article-specific social links
+    articleYoutubeUrl: doc.articleYoutubeUrl,
+    articleFacebookUrl: doc.articleFacebookUrl,
+    articleMoreLinksUrl: doc.articleMoreLinksUrl,
   };
 }
 
@@ -64,6 +68,10 @@ function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
         twitterSite: doc.twitterSite,
         twitterCreator: doc.twitterCreator,
         updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+        // Footer social links
+        footerYoutubeUrl: doc.footerYoutubeUrl,
+        footerFacebookUrl: doc.footerFacebookUrl,
+        footerMoreLinksUrl: doc.footerMoreLinksUrl,
     };
 }
 
@@ -126,6 +134,10 @@ export async function getAllNewsArticles(params?: { authorId?: string, startDate
                 ogDescription: article.ogDescription || '',
                 ogImage: article.ogImage || '',
                 canonicalUrl: article.canonicalUrl || '',
+                // Article-specific social links - ensure they are initialized if not present
+                articleYoutubeUrl: article.articleYoutubeUrl || '',
+                articleFacebookUrl: article.articleFacebookUrl || '',
+                articleMoreLinksUrl: article.articleMoreLinksUrl || '',
                 _id: new ObjectId(), 
             };
         });
@@ -154,6 +166,10 @@ export async function addNewsArticle(articleData: CreateNewsArticleData): Promis
       inlineAdSnippets: articleData.inlineAdSnippets || [], 
       metaKeywords: Array.isArray(articleData.metaKeywords) ? articleData.metaKeywords : (articleData.metaKeywords ? (articleData.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k) : []),
       authorId: authorId || undefined, // Add authorId from session
+      // Ensure new social link fields are included
+      articleYoutubeUrl: articleData.articleYoutubeUrl || undefined,
+      articleFacebookUrl: articleData.articleFacebookUrl || undefined,
+      articleMoreLinksUrl: articleData.articleMoreLinksUrl || undefined,
       _id: new ObjectId(), 
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
@@ -194,6 +210,10 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     if (updates.metaKeywords && !Array.isArray(updates.metaKeywords)) {
         updateDoc.metaKeywords = (updates.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k);
     }
+    // Ensure new social link fields are handled in updates
+    if (updates.articleYoutubeUrl !== undefined) updateDoc.articleYoutubeUrl = updates.articleYoutubeUrl;
+    if (updates.articleFacebookUrl !== undefined) updateDoc.articleFacebookUrl = updates.articleFacebookUrl;
+    if (updates.articleMoreLinksUrl !== undefined) updateDoc.articleMoreLinksUrl = updates.articleMoreLinksUrl;
 
 
     const result = await db.collection('articles').findOneAndUpdate(
@@ -377,8 +397,13 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
                 twitterSite: settingsDoc.twitterSite,
                 twitterCreator: settingsDoc.twitterCreator,
                 updatedAt: settingsDoc.updatedAt instanceof Date ? settingsDoc.updatedAt.toISOString() : settingsDoc.updatedAt,
+                // Footer social links
+                footerYoutubeUrl: settingsDoc.footerYoutubeUrl,
+                footerFacebookUrl: settingsDoc.footerFacebookUrl,
+                footerMoreLinksUrl: settingsDoc.footerMoreLinksUrl,
             };
         }
+        // Default SEO settings if nothing found in DB
         return {
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite",
@@ -390,16 +415,22 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
             ogType: "website",
             twitterCard: "summary_large_image",
             updatedAt: new Date().toISOString(),
+            footerYoutubeUrl: "https://youtube.com", // Default example
+            footerFacebookUrl: "https://facebook.com", // Default example
+            footerMoreLinksUrl: "#", // Default example
         };
     } catch (error) {
         console.error("Error fetching SEO settings:", error);
-        return {
+        return { // Fallback default
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite - Default",
             metaDescription: "Default description.",
             metaKeywords: [],
             faviconUrl: "/favicon.ico",
             updatedAt: new Date().toISOString(),
+            footerYoutubeUrl: "https://youtube.com",
+            footerFacebookUrl: "https://facebook.com",
+            footerMoreLinksUrl: "#",
         };
     }
 }
@@ -411,6 +442,10 @@ export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Pr
             ...settingsData,
             metaKeywords: Array.isArray(settingsData.metaKeywords) ? settingsData.metaKeywords : (settingsData.metaKeywords || '').split(',').map(k => k.trim()).filter(k => k),
             updatedAt: new Date(),
+            // Ensure new footer social links are included
+            footerYoutubeUrl: settingsData.footerYoutubeUrl || undefined,
+            footerFacebookUrl: settingsData.footerFacebookUrl || undefined,
+            footerMoreLinksUrl: settingsData.footerMoreLinksUrl || undefined,
         };
         const result = await db.collection('seo_settings').findOneAndUpdate(
             { _id: GLOBAL_SEO_SETTINGS_DOC_ID },
@@ -434,6 +469,10 @@ export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Pr
                 twitterSite: updatedDocument.twitterSite,
                 twitterCreator: updatedDocument.twitterCreator,
                 updatedAt: updatedDocument.updatedAt instanceof Date ? updatedDocument.updatedAt.toISOString() : updatedDocument.updatedAt,
+                // Footer social links
+                footerYoutubeUrl: updatedDocument.footerYoutubeUrl,
+                footerFacebookUrl: updatedDocument.footerFacebookUrl,
+                footerMoreLinksUrl: updatedDocument.footerMoreLinksUrl,
             };
         }
         return null;
@@ -820,7 +859,7 @@ export async function getTopUserPostActivity(limit: number = 5): Promise<any[]> 
             }
         }
         // Sort by most posts this month, then week, then today for tie-breaking
-        activity.sort((a,b) => b.postsThisMonth - a.postsThisMonth || b.postsThisWeek - a.postsThisWeek || b.postsToday - a.postsToday);
+        activity.sort((a,b) => b.postsThisMonth - a.postsThisMonth || b.postsThisWeek - a.postsThisWeek || b.today - a.postsToday);
         return activity.slice(0, limit);
 
     } catch (error) {
@@ -828,3 +867,4 @@ export async function getTopUserPostActivity(limit: number = 5): Promise<any[]> 
         return [];
     }
 }
+

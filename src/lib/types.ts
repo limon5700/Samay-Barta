@@ -20,6 +20,11 @@ export interface NewsArticle {
   ogDescription?: string;
   ogImage?: string; // URL to an Open Graph image
   canonicalUrl?: string;
+
+  // Article-specific social links
+  articleYoutubeUrl?: string;
+  articleFacebookUrl?: string;
+  articleMoreLinksUrl?: string; // A generic "more" link related to the article
 }
 
 export type Category = "Technology" | "Sports" | "Business" | "World" | "Entertainment" | string; // Allow string for flexibility if categories are dynamic
@@ -67,6 +72,11 @@ export interface SeoSettings {
   twitterSite?: string; // e.g., @YourTwitterHandle
   twitterCreator?: string; // e.g., @AuthorTwitterHandle (if applicable as a default)
   updatedAt?: string;
+
+  // Global footer social links
+  footerYoutubeUrl?: string;
+  footerFacebookUrl?: string;
+  footerMoreLinksUrl?: string;
 }
 
 export type CreateSeoSettingsData = Omit<SeoSettings, 'id' | 'updatedAt'>;
@@ -148,3 +158,4 @@ export interface DashboardAnalytics {
   };
   userPostActivity?: UserActivity[]; // Top active users or specific user stats
 }
+
