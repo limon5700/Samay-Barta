@@ -1,9 +1,9 @@
 
 'use server';
 
-import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData } from './types';
+import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
-import { initialSampleNewsArticles } from './constants'; // Keep for potential seeding
+import { initialSampleNewsArticles } from './constants'; 
 
 
 // Helper to map MongoDB document to NewsArticle type
@@ -18,7 +18,7 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     publishedDate: doc.publishedDate instanceof Date ? doc.publishedDate.toISOString() : doc.publishedDate,
     imageUrl: doc.imageUrl,
     dataAiHint: doc.dataAiHint,
-    inlineAdSnippets: doc.inlineAdSnippets || [], // Ensure it's an array
+    inlineAdSnippets: doc.inlineAdSnippets || [], 
   };
 }
 
@@ -27,30 +27,42 @@ function mapMongoDocumentToGadget(doc: any): Gadget {
   if (!doc) return null as any;
   return {
     id: doc._id.toHexString(),
-    section: doc.section || doc.placement, // Handle old placement field during transition
+    section: doc.section || doc.placement, 
     title: doc.title,
-    content: doc.content || doc.codeSnippet, // Handle old codeSnippet field
+    content: doc.content || doc.codeSnippet, 
     isActive: doc.isActive,
     order: doc.order,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
   };
 }
 
+// Helper to map MongoDB document to SeoSettings type
+function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
+    if (!doc) return null as any;
+    return {
+        id: doc._id.toHexString(),
+        siteTitle: doc.siteTitle,
+        metaDescription: doc.metaDescription,
+        metaKeywords: doc.metaKeywords || [],
+        faviconUrl: doc.faviconUrl,
+        updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    };
+}
+
+
 export async function getAllNewsArticles(): Promise<NewsArticle[]> {
   try {
     const { db } = await connectToDatabase();
     const articlesCollection = db.collection('articles');
-    // Optional: Seeding logic if collection is empty
     const count = await articlesCollection.countDocuments();
     if (count === 0 && initialSampleNewsArticles.length > 0) {
         console.log("Seeding initial news articles...");
-        // Map initial data to include Date objects where appropriate
         const articlesToSeed = initialSampleNewsArticles.map(article => ({
             ...article,
-            publishedDate: new Date(article.publishedDate), // Convert string date to Date object
+            publishedDate: new Date(article.publishedDate), 
             inlineAdSnippets: article.inlineAdSnippets || [],
-            id: undefined, // Remove the temporary string ID
-            _id: new ObjectId(), // Generate a new ObjectId
+            id: undefined, 
+            _id: new ObjectId(), 
         }));
         await articlesCollection.insertMany(articlesToSeed);
         console.log(`${articlesToSeed.length} articles seeded.`);
@@ -65,16 +77,14 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
   }
 }
 
-// --- News Article CRUD ---
-
 export async function addNewsArticle(articleData: CreateNewsArticleData): Promise<NewsArticle | null> {
   try {
     const { db } = await connectToDatabase();
     const newArticleDocument = {
       ...articleData,
-      publishedDate: new Date(), // Set publish date on creation
-      inlineAdSnippets: articleData.inlineAdSnippets || [], // Ensure array exists
-      _id: new ObjectId(), // Explicitly generate ID here if needed, or let MongoDB handle it
+      publishedDate: new Date(), 
+      inlineAdSnippets: articleData.inlineAdSnippets || [], 
+      _id: new ObjectId(), 
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
 
@@ -100,16 +110,13 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
 
-    // Ensure publishedDate is not accidentally updated here unless explicitly needed
     const updateDoc: any = { ...updates };
-    delete updateDoc.publishedDate; // Prevent accidental overwrite of original publish date
+    delete updateDoc.publishedDate; 
     if (updateDoc.inlineAdSnippets === undefined) {
-        delete updateDoc.inlineAdSnippets; // Don't set to null if not provided
+        delete updateDoc.inlineAdSnippets; 
     } else if (!Array.isArray(updateDoc.inlineAdSnippets)) {
-        // Basic validation if needed, ensure it's an array
         updateDoc.inlineAdSnippets = [];
     }
-
 
     const result = await db.collection('articles').findOneAndUpdate(
       { _id: objectId },
@@ -156,9 +163,7 @@ export async function getArticleById(id: string): Promise<NewsArticle | null> {
   }
 }
 
-// --- Gadget (Advertisement) CRUD ---
 
-// Renamed from addAdvertisement
 export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | null> {
   try {
     const { db } = await connectToDatabase();
@@ -167,7 +172,7 @@ export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | 
       title: gadgetData.title,
       content: gadgetData.content,
       isActive: gadgetData.isActive,
-      order: gadgetData.order, // Add order
+      order: gadgetData.order, 
       createdAt: new Date(),
       _id: new ObjectId(),
     };
@@ -185,11 +190,9 @@ export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | 
   }
 }
 
-// Renamed from getAllAdvertisements
 export async function getAllGadgets(): Promise<Gadget[]> {
   try {
     const { db } = await connectToDatabase();
-    // Sort by section first, then by order within the section
     const gadgetsCursor = db.collection('advertisements').find({}).sort({ section: 1, order: 1, createdAt: -1 });
     const gadgetsArray = await gadgetsCursor.toArray();
     return gadgetsArray.map(mapMongoDocumentToGadget);
@@ -199,14 +202,11 @@ export async function getAllGadgets(): Promise<Gadget[]> {
   }
 }
 
-// Function to get *all* active gadgets for a specific layout section.
-// Returns an array of gadgets, ordered by the 'order' field.
-// Renamed from getAdsByPlacement
 export async function getActiveGadgetsBySection(section: LayoutSection): Promise<Gadget[]> {
   try {
     const { db } = await connectToDatabase();
     let query: any = {
-        $or: [ // Match either new 'section' field or old 'placement' field
+        $or: [ 
             { section: section },
             { placement: section }
         ],
@@ -215,7 +215,6 @@ export async function getActiveGadgetsBySection(section: LayoutSection): Promise
 
     const gadgetsCursor = db.collection('advertisements').find(query).sort({ order: 1, createdAt: -1 });
     const gadgetsArray = await gadgetsCursor.toArray();
-    // console.log(`Found ${gadgetsArray.length} active gadgets for section ${section}`);
     return gadgetsArray.map(mapMongoDocumentToGadget);
 
   } catch (error) {
@@ -224,8 +223,6 @@ export async function getActiveGadgetsBySection(section: LayoutSection): Promise
   }
 }
 
-
-// Renamed from updateAdvertisement
 export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id' | 'createdAt'>>): Promise<Gadget | null> {
   if (!ObjectId.isValid(id)) {
     console.error("Invalid ID for gadget update:", id);
@@ -235,13 +232,10 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
 
-    // Prepare the update document, removing fields that shouldn't be directly set
     const updateDoc: any = { ...updates };
-    delete updateDoc.createdAt; // Cannot update createdAt
-    delete updateDoc.id;      // Cannot update id
+    delete updateDoc.createdAt; 
+    delete updateDoc.id;      
 
-
-    // Handle potential renaming from old fields
     if (updateDoc.placement && !updateDoc.section) {
         updateDoc.section = updateDoc.placement;
         delete updateDoc.placement;
@@ -250,12 +244,11 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
         updateDoc.content = updateDoc.codeSnippet;
         delete updateDoc.codeSnippet;
     }
-    // Remove obsolete fields if they somehow sneak in
     delete updateDoc.adType;
     delete updateDoc.imageUrl;
     delete updateDoc.linkUrl;
     delete updateDoc.altText;
-    delete updateDoc.articleId; // articleId is removed from the gadget model
+    delete updateDoc.articleId; 
 
     const result = await db.collection('advertisements').findOneAndUpdate(
       { _id: objectId },
@@ -269,7 +262,6 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
   }
 }
 
-// Renamed from deleteAdvertisement
 export async function deleteGadget(id: string): Promise<boolean> {
   if (!ObjectId.isValid(id)) {
     console.error("Invalid ID for gadget delete:", id);
@@ -286,18 +278,71 @@ export async function deleteGadget(id: string): Promise<boolean> {
   }
 }
 
-// --- Helper Functions ---
 
-// Function to get all distinct layout sections currently used by gadgets
+// --- SEO Settings ---
+// Placeholder functions for SEO settings.
+// In a real application, this would interact with a 'seo_settings' collection.
+
+const SEO_SETTINGS_ID = "global_seo_settings"; // Use a fixed ID for the single SEO settings document
+
+export async function getSeoSettings(): Promise<SeoSettings | null> {
+    console.log("Attempting to get SEO settings (placeholder).");
+    // try {
+    //     const { db } = await connectToDatabase();
+    //     const settingsDoc = await db.collection('seo_settings').findOne({ _id: new ObjectId(SEO_SETTINGS_ID) }); // Or a fixed known ID
+    //     return settingsDoc ? mapMongoDocumentToSeoSettings(settingsDoc) : null;
+    // } catch (error) {
+    //     console.error("Error fetching SEO settings:", error);
+    //     return null;
+    // }
+    // Mock implementation:
+    return {
+        id: SEO_SETTINGS_ID,
+        siteTitle: "Samay Barta Lite - Default Title",
+        metaDescription: "Your concise news source, powered by AI.",
+        metaKeywords: ["news", "bangla news", "ai news"],
+        faviconUrl: "/favicon.ico", // Default favicon path
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Promise<SeoSettings | null> {
+    console.log("Attempting to update SEO settings (placeholder):", settingsData);
+    // try {
+    //     const { db } = await connectToDatabase();
+    //     const updateDoc = {
+    //         ...settingsData,
+    //         updatedAt: new Date(),
+    //     };
+    //     const result = await db.collection('seo_settings').findOneAndUpdate(
+    //         { _id: new ObjectId(SEO_SETTINGS_ID) }, // Or a fixed known ID
+    //         { $set: updateDoc },
+    //         { upsert: true, returnDocument: 'after' } // Create if it doesn't exist
+    //     );
+    //     return result ? mapMongoDocumentToSeoSettings(result) : null;
+    // } catch (error) {
+    //     console.error("Error updating SEO settings:", error);
+    //     return null;
+    // }
+    // Mock implementation:
+     const mockUpdatedSettings: SeoSettings = {
+        id: SEO_SETTINGS_ID,
+        ...settingsData,
+        metaKeywords: settingsData.metaKeywords || [],
+        updatedAt: new Date().toISOString(),
+    };
+    return mockUpdatedSettings;
+}
+
+
+// --- Helper Functions ---
 export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
     try {
         const { db } = await connectToDatabase();
-        // Check both 'section' and 'placement' fields for broader compatibility
         const distinctSections = await db.collection('advertisements').distinct('section') as LayoutSection[];
         const distinctPlacements = await db.collection('advertisements').distinct('placement') as LayoutSection[];
-        // Combine and deduplicate
         const allSections = [...new Set([...distinctSections, ...distinctPlacements])];
-        return allSections.filter(s => s); // Filter out any null/undefined values
+        return allSections.filter(s => s); 
     } catch (error) {
         console.error("Error fetching distinct layout sections:", error);
         return [];

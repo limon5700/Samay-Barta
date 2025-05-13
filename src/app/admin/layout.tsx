@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut, Layout } from 'lucide-react'; // Changed Megaphone to Layout
+import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3 } from 'lucide-react'; // Added Settings, Users, BarChart3
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import { redirect } from 'next/navigation';
 
@@ -10,16 +10,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const session = await getSession();
 
   if (!session?.isAuthenticated && typeof window !== 'undefined') {
-    // This check should ideally be handled by middleware for client-side navigation
-    // For direct access or SSR fallback where middleware might not have run (less common for pages),
-    // redirect if not on the login page itself.
-    // Note: `usePathname` can't be used in server components, so direct string check or middleware is key.
-    // The middleware already handles this, but this is an additional layer for direct nav.
-    // The middleware already handles this, but this is an additional layer for direct nav.
-    // redirect('/admin/login'); // This might cause issues if current page IS login page or during build.
     // Middleware handles this better.
   }
-
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -41,13 +33,25 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Manage Articles
               </Link>
             </Button>
-            {/* Updated Link and Icon */}
             <Button variant="secondary" size="sm" asChild>
               <Link href="/admin/layout-editor">
                 <Layout className="h-4 w-4 mr-2" />
                 Layout Editor
               </Link>
             </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/admin/seo">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                SEO Management
+              </Link>
+            </Button>
+            {/* Placeholder for User Management - Full implementation is complex and out of scope for this update */}
+            {/* <Button variant="ghost" size="sm" asChild>
+              <Link href="/admin/users">
+                <Users className="h-4 w-4 mr-2" />
+                User Management
+              </Link>
+            </Button> */}
             <form action={logoutAction}>
               <Button variant="destructive" size="sm" type="submit" className="gap-1.5">
                 <LogOut className="h-4 w-4" />

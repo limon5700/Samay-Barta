@@ -19,7 +19,8 @@ export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
     'homepage-top': [],
-    'homepage-content-bottom': [], // Added new section
+    'homepage-content-bottom': [],
+    'homepage-article-interstitial': [], // Added new section
     'article-top': [], 
     'article-bottom': [], 
     'sidebar-left': [],
@@ -48,7 +49,8 @@ export default function HomePage() {
 
         const sectionsToFetch: LayoutSection[] = [
           'homepage-top',
-          'homepage-content-bottom', // Added new section
+          'homepage-content-bottom',
+          'homepage-article-interstitial', // Fetch gadgets for this section
           'sidebar-left',
           'sidebar-right',
           'footer',
@@ -117,24 +119,24 @@ export default function HomePage() {
       <Skeleton className="h-16 w-full mb-4 rounded-none" />
       
       <div className="container mx-auto px-4">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" /> {/* Homepage Top Skeleton */}
+        <Skeleton className="h-24 w-full mb-6 rounded-md" /> 
       </div>
 
       <div className="container mx-auto px-4 flex-grow">
-        <div className="space-y-8"> {/* Linear flow for skeletons */}
-          {/* Left Sidebar Content Skeleton */}
-          <div className="w-full space-y-4">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Left Sidebar Skeleton */}
+          <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-4">
             <Skeleton className="h-48 w-full rounded-md" />
             <Skeleton className="h-32 w-full rounded-md" />
-          </div>
+          </aside>
 
           {/* Main Content Area Skeleton */}
-          <div className="w-full">
+          <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6"> {/* Adjusted for interstitial ads */}
+              {[...Array(6)].map((_, i) => ( // Simulate articles and potential ad slots
                 <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                   <Skeleton className="h-40 w-full rounded-xl" />
                   <div className="space-y-2 pt-2">
@@ -148,27 +150,25 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Homepage Content Bottom Skeleton (for 2 ads) */}
-          <div className="w-full space-y-4">
-            <Skeleton className="h-24 w-full rounded-md" />
-            <Skeleton className="h-24 w-full rounded-md" />
-          </div>
-
-          {/* Right Sidebar Content Skeleton */}
-          <div className="w-full space-y-4">
+          {/* Right Sidebar Skeleton */}
+          <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-4">
             <Skeleton className="h-64 w-full rounded-md" />
             <Skeleton className="h-40 w-full rounded-md" />
-          </div>
+          </aside>
+        </div>
+         {/* Homepage Content Bottom Skeleton (for 2 ads) */}
+        <div className="mt-8 space-y-4">
+            <Skeleton className="h-24 w-full rounded-md" />
+            <Skeleton className="h-24 w-full rounded-md" />
         </div>
       </div>
       
       <div className="container mx-auto px-4 mt-8">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" /> {/* Footer Gadget Skeleton */}
+        <Skeleton className="h-24 w-full mb-6 rounded-md" /> 
       </div>
-      <Skeleton className="h-16 w-full mt-4 rounded-none" /> {/* Footer Component Skeleton */}
+      <Skeleton className="h-16 w-full mt-4 rounded-none" /> 
     </div>
   );
-
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans">
@@ -183,32 +183,31 @@ export default function HomePage() {
           <>
             {renderGadgetsForSection('homepage-top', 'mb-8')}
             
-            <div className="space-y-8"> {/* Main container for linear flow */}
-              
-              {/* Left Sidebar Content - now part of the main flow */}
-              <div className="w-full">
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Left Sidebar */}
+              <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-6">
                 {renderGadgetsForSection('sidebar-left')}
                 {activeGadgets['sidebar-left']?.length === 0 && (
                   <Card className="p-4 bg-muted/30 hidden md:block">
-                    <CardHeader className="p-0 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Left Area</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
-                    </CardContent>
+                     <CardHeader className="p-0 pb-2"><CardTitle className="text-sm text-muted-foreground">Left Area</CardTitle></CardHeader>
+                     <CardContent className="p-0"><p className="text-xs text-muted-foreground">No gadgets.</p></CardContent>
                   </Card>
                 )}
-              </div>
+              </aside>
 
-              {/* Main News Content Area */}
-              <div className="w-full">
+              {/* Main Content Area */}
+              <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
                 <CategoryFilter
                   categories={allNewsCategories}
                   selectedCategory={selectedCategory}
                   onSelectCategory={handleSelectCategory}
                 />
                 {filteredArticles.length > 0 ? (
-                  <NewsList articles={filteredArticles} />
+                  <NewsList 
+                    articles={filteredArticles} 
+                    interstitialGadgets={activeGadgets['homepage-article-interstitial']} 
+                    adsAfterEvery={2} // Display ad after every 2 articles
+                  />
                 ) : (
                   <p className="text-center text-muted-foreground mt-16 text-xl">
                     {getUIText("noArticlesFound")}
@@ -216,25 +215,20 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* New: Homepage Content Bottom Ads (e.g., for 2 ads consecutively) */}
-              <div className="w-full mt-8"> {/* Added margin-top for spacing */}
-                {renderGadgetsForSection('homepage-content-bottom')}
-              </div>
-
-              {/* Right Sidebar Content - now part of the main flow */}
-              <div className="w-full mt-8"> {/* Added margin-top for spacing */}
+              {/* Right Sidebar */}
+              <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-6">
                 {renderGadgetsForSection('sidebar-right')}
-                {activeGadgets['sidebar-right']?.length === 0 && (
+                 {activeGadgets['sidebar-right']?.length === 0 && (
                    <Card className="p-4 bg-muted/30 hidden md:block">
-                     <CardHeader className="p-0 pb-2">
-                       <CardTitle className="text-sm text-muted-foreground">Right Area</CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-0">
-                       <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
-                     </CardContent>
+                     <CardHeader className="p-0 pb-2"><CardTitle className="text-sm text-muted-foreground">Right Area</CardTitle></CardHeader>
+                     <CardContent className="p-0"><p className="text-xs text-muted-foreground">No gadgets.</p></CardContent>
                    </Card>
                 )}
-              </div>
+              </aside>
+            </div>
+            {/* Homepage Content Bottom Ads */}
+            <div className="mt-8">
+                {renderGadgetsForSection('homepage-content-bottom')}
             </div>
           </>
         )}
@@ -245,4 +239,3 @@ export default function HomePage() {
     </div>
   );
 }
-

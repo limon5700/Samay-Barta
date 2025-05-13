@@ -16,18 +16,18 @@ export type Category = "Technology" | "Sports" | "Business" | "World" | "Enterta
 // Renamed AdPlacement to LayoutSection for clarity, matching Blogger's concept
 export type LayoutSection =
   | 'homepage-top'
-  | 'homepage-content-bottom' // Added new section for ads after articles on homepage
+  | 'homepage-content-bottom'
+  | 'homepage-article-interstitial' // New section for ads between articles on homepage
   | 'article-top'
   | 'article-bottom'
   | 'sidebar-left'
   | 'sidebar-right'
   | 'footer'
-  | 'article-inline' // This section might be used globally for default inline ads if not specified in article
+  | 'article-inline' 
   | 'header-logo-area'
   | 'below-header'
   ;
 
-// Renamed Advertisement to Gadget, simplified for HTML/JS content
 export interface Gadget {
   id: string; // MongoDB's _id.toHexString()
   section: LayoutSection; // The layout section where this gadget appears
@@ -38,14 +38,19 @@ export interface Gadget {
   order?: number; // Optional: For ordering gadgets within a section
 }
 
-// Type for creating new news articles (before ID and publishedDate are assigned)
 export type CreateNewsArticleData = Omit<NewsArticle, 'id' | 'publishedDate'>;
 
-// Type for creating new gadgets (before ID and createdAt are assigned)
 export type CreateGadgetData = Omit<Gadget, 'id' | 'createdAt'>;
 
-// Keep original Advertisement type temporarily if needed during transition, but aim to remove it.
-// export type AdType = 'custom' | 'external';
-// export interface Advertisement { ... old structure ... }
-// export type CreateAdvertisementData = Omit<Advertisement, 'id' | 'createdAt'>;
+// Placeholder for SEO Settings
+export interface SeoSettings {
+  id: string; // Typically a single document in a collection
+  siteTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string[]; // Array of keywords
+  faviconUrl?: string;
+  // Add other SEO related fields as needed
+  updatedAt?: string;
+}
 
+export type CreateSeoSettingsData = Omit<SeoSettings, 'id' | 'updatedAt'>;

@@ -30,6 +30,7 @@ const layoutStructure: { name: string; section: LayoutSection; description: stri
   { name: "Header Area", section: 'header-logo-area', description: "Gadgets below the site title/logo." },
   { name: "Below Header", section: 'below-header', description: "Full width area below the header." },
   { name: "Homepage Top", section: 'homepage-top', description: "Area above the main content on the homepage." },
+  { name: "Homepage Article Interstitial", section: 'homepage-article-interstitial', description: "Ads displayed between articles on the homepage (e.g., after every 2 articles)." },
   { name: "Homepage Content Bottom", section: 'homepage-content-bottom', description: "Area below the main article list on the homepage (for 1-2 ads)." },
   { name: "Sidebar Left", section: 'sidebar-left', description: "Left sidebar/area on homepage and article pages." },
   { name: "Sidebar Right", section: 'sidebar-right', description: "Right sidebar/area on homepage and article pages." },
@@ -154,17 +155,15 @@ export default function LayoutEditorPage() {
 
   // Group gadgets by section, safely handling invalid/missing sections
   const gadgetsBySection = gadgets.reduce((acc, gadget) => {
-    // Ensure gadget.section is a valid section defined in layoutStructure
     if (!gadget.section || !validSections.has(gadget.section)) {
       console.warn(`Gadget ${gadget.id} has invalid or missing section: "${gadget.section}". Skipping.`);
-      return acc; // Skip gadgets with invalid/missing sections
+      return acc; 
     }
     const section = gadget.section;
     if (!acc[section]) {
       acc[section] = [];
     }
     acc[section].push(gadget);
-    // Sort gadgets within the section by order
     acc[section].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     return acc;
   }, {} as Record<LayoutSection, Gadget[]>);
@@ -178,7 +177,6 @@ export default function LayoutEditorPage() {
     );
   }
 
-  // Explanation for the user regarding the 404 and CORS errors
   const errorExplanation = (
      <Card className="mb-6 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
         <CardHeader>
@@ -259,7 +257,6 @@ export default function LayoutEditorPage() {
         ))}
       </div>
 
-      {/* Add/Edit Gadget Dialog */}
       <Dialog open={isAddEditDialogOpen} onOpenChange={(isOpen) => {
           if (!isOpen) { setIsAddEditDialogOpen(false); setEditingGadget(null); setSelectedSection(null); }
           else { setIsAddEditDialogOpen(true); }
@@ -270,16 +267,14 @@ export default function LayoutEditorPage() {
             <DialogDescription>
               {editingGadget
                 ? "Modify the gadget's content or settings."
-                : selectedSection // Check if selectedSection exists before formatting
+                : selectedSection 
                   ? `Add a new gadget to the "${formatSectionName(selectedSection)}" section.`
-                  : "Add a new gadget." // Fallback description
+                  : "Add a new gadget."
               }
             </DialogDescription>
           </DialogHeader>
-          {/* Conditionally render form to ensure defaultValues are correctly set */}
            {isAddEditDialogOpen && (
                <GadgetForm
-                // Pass the specific gadget to edit, or a template with the pre-selected section for adding
                 gadget={editingGadget ?? (selectedSection ? { section: selectedSection, isActive: true } as Gadget : null)}
                 onSubmit={handleFormSubmit}
                 onCancel={() => { setIsAddEditDialogOpen(false); setEditingGadget(null); setSelectedSection(null);}}
@@ -290,7 +285,6 @@ export default function LayoutEditorPage() {
         </DialogContent>
       </Dialog>
 
-       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={(isOpen) => {
           if (!isOpen) { setIsDeleteDialogOpen(false); setGadgetToDelete(null); }
           else { setIsDeleteDialogOpen(true); }
@@ -316,4 +310,3 @@ export default function LayoutEditorPage() {
     </div>
   );
 }
-
