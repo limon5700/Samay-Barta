@@ -2,9 +2,10 @@
 
 'use server';
 
-import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, User, Role, CreateUserData, CreateRoleData, Permission } from './types';
+import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, User, Role, CreateUserData, CreateRoleData, Permission, DashboardAnalytics } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
 import { initialSampleNewsArticles } from './constants'; 
+import { getSession } from '@/app/admin/auth/actions';
 // Note: For a real application, use a library like bcrypt for password hashing.
 // const bcrypt = require('bcryptjs'); // Example, not used for simplicity in this iteration.
 
@@ -21,6 +22,7 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     imageUrl: doc.imageUrl,
     dataAiHint: doc.dataAiHint,
     inlineAdSnippets: doc.inlineAdSnippets || [],
+    authorId: doc.authorId,
     // SEO fields
     metaTitle: doc.metaTitle,
     metaDescription: doc.metaDescription,
@@ -76,7 +78,7 @@ function mapMongoDocumentToUser(doc: any): User {
     roles: doc.roles || [],
     isActive: doc.isActive === undefined ? true : doc.isActive,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
-    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.createdAt,
   };
 }
 
@@ -88,17 +90,26 @@ function mapMongoDocumentToRole(doc: any): Role {
     name: doc.name,
     permissions: doc.permissions || [],
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
-    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.createdAt,
   };
 }
 
 
-export async function getAllNewsArticles(): Promise<NewsArticle[]> {
+export async function getAllNewsArticles(params?: { authorId?: string, startDate?: Date, endDate?: Date }): Promise<NewsArticle[]> {
   try {
     const { db } = await connectToDatabase();
     const articlesCollection = db.collection('articles');
-    const count = await articlesCollection.countDocuments();
-    if (count === 0 && initialSampleNewsArticles.length > 0) {
+    
+    const query: any = {};
+    if (params?.authorId) query.authorId = params.authorId;
+    if (params?.startDate || params?.endDate) {
+      query.publishedDate = {};
+      if (params.startDate) query.publishedDate.$gte = params.startDate;
+      if (params.endDate) query.publishedDate.$lte = params.endDate;
+    }
+
+    const count = await articlesCollection.countDocuments(query);
+    if (count === 0 && !params?.authorId && !params?.startDate && !params?.endDate && initialSampleNewsArticles.length > 0) {
         console.log("Seeding initial news articles...");
         const articlesToSeed = initialSampleNewsArticles.map(article => {
             const { id, ...restOfArticle } = article; // Exclude frontend 'id'
@@ -106,6 +117,7 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
                 ...restOfArticle,
                 publishedDate: new Date(article.publishedDate), 
                 inlineAdSnippets: article.inlineAdSnippets || [],
+                authorId: undefined, // Initially no author for seeded articles
                  // SEO fields - ensure they exist or are empty arrays/undefined
                 metaTitle: article.metaTitle || '',
                 metaDescription: article.metaDescription || '',
@@ -121,7 +133,7 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
         console.log(`${articlesToSeed.length} articles seeded.`);
     }
 
-    const articlesCursor = articlesCollection.find({}).sort({ publishedDate: -1 });
+    const articlesCursor = articlesCollection.find(query).sort({ publishedDate: -1 });
     const articlesArray = await articlesCursor.toArray();
     return articlesArray.map(mapMongoDocumentToNewsArticle);
   } catch (error) {
@@ -133,11 +145,15 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
 export async function addNewsArticle(articleData: CreateNewsArticleData): Promise<NewsArticle | null> {
   try {
     const { db } = await connectToDatabase();
+    const session = await getSession();
+    const authorId = session?.userId;
+
     const newArticleDocument = {
       ...articleData,
       publishedDate: new Date(), 
       inlineAdSnippets: articleData.inlineAdSnippets || [], 
       metaKeywords: Array.isArray(articleData.metaKeywords) ? articleData.metaKeywords : (articleData.metaKeywords ? (articleData.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k) : []),
+      authorId: authorId || undefined, // Add authorId from session
       _id: new ObjectId(), 
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
@@ -162,9 +178,14 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
   try {
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
+    const session = await getSession();
+    const authorId = session?.userId;
+
 
     const updateDoc: any = { ...updates };
     delete updateDoc.publishedDate; 
+    updateDoc.authorId = authorId || updates.authorId; // Prefer session authorId, fallback to existing if any
+
     if (updateDoc.inlineAdSnippets === undefined) {
         delete updateDoc.inlineAdSnippets; 
     } else if (!Array.isArray(updateDoc.inlineAdSnippets)) {
@@ -499,7 +520,10 @@ export async function updateUser(id: string, updates: Partial<CreateUserData>): 
       // updatePayload.passwordHash = await bcrypt.hash(updates.password, 10);
       updatePayload.passwordHash = updates.password; // Insecure
       delete updatePayload.password;
+    } else {
+      delete updatePayload.password; // Ensure password field is not set if not provided
     }
+
 
     const result = await db.collection('users').findOneAndUpdate(
       { _id: new ObjectId(id) },
@@ -637,3 +661,170 @@ export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
     }
 }
 
+// --- Analytics Data Functions ---
+export async function getArticlesStats(): Promise<{ totalArticles: number; articlesToday: number }> {
+  try {
+    const { db } = await connectToDatabase();
+    const articlesCollection = db.collection('articles');
+
+    const totalArticles = await articlesCollection.countDocuments();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1); // Start of tomorrow
+
+    const articlesToday = await articlesCollection.countDocuments({
+      publishedDate: {
+        $gte: today,
+        $lt: tomorrow,
+      },
+    });
+
+    return { totalArticles, articlesToday };
+  } catch (error) {
+    console.error("Error fetching articles stats:", error);
+    return { totalArticles: 0, articlesToday: 0 };
+  }
+}
+
+export async function getActiveGadgetsCount(): Promise<number> {
+  try {
+    const { db } = await connectToDatabase();
+    const count = await db.collection('advertisements').countDocuments({ isActive: true });
+    return count;
+  } catch (error) {
+    console.error("Error fetching active gadgets count:", error);
+    return 0;
+  }
+}
+
+export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
+  try {
+    const articlesStats = await getArticlesStats();
+    const users = await getAllUsers(); // This already exists
+    const activeGadgets = await getActiveGadgetsCount();
+
+    // Placeholder for visitor stats - requires separate tracking implementation
+    const visitorStats = {
+      today: 0, // Replace with actual data
+      activeNow: 0,
+      thisWeek: 0,
+      thisMonth: 0,
+      lastMonth: 0,
+    };
+
+    // Placeholder for user post activity - requires authorId on articles and aggregation logic
+    const userPostActivity: any[] = []; 
+    // Example: You might fetch users and then count their posts for different periods.
+    // This is a simplified example, real implementation would be more complex.
+    // for (const user of users) {
+    //   const postsToday = await db.collection('articles').countDocuments({ authorId: user.id, publishedDate: { $gte: todayStart }});
+    //   userPostActivity.push({ userId: user.id, username: user.username, postsToday });
+    // }
+
+
+    return {
+      totalArticles: articlesStats.totalArticles,
+      articlesToday: articlesStats.articlesToday,
+      totalUsers: users.length,
+      activeGadgets,
+      visitorStats, // Add this once implemented
+      userPostActivity, // Add this once implemented
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard analytics:", error);
+    // Return default/empty state on error
+    return {
+      totalArticles: 0,
+      articlesToday: 0,
+      totalUsers: 0,
+      activeGadgets: 0,
+      visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0 },
+      userPostActivity: [],
+    };
+  }
+}
+
+// --- User Post Activity ---
+// This is a more complex function and depends on `authorId` being present in articles.
+// It's provided as an example of how you might approach it.
+export async function getUserPostCounts(userId: string, period: 'today' | 'thisWeek' | 'thisMonth' | 'thisYear'): Promise<number> {
+    if (!ObjectId.isValid(userId)) return 0;
+
+    const now = new Date();
+    let startDate: Date;
+
+    switch (period) {
+        case 'today':
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+        case 'thisWeek':
+            const firstDayOfWeek = now.getDate() - now.getDay();
+            startDate = new Date(now.setDate(firstDayOfWeek));
+            startDate.setHours(0, 0, 0, 0);
+            break;
+        case 'thisMonth':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+        case 'thisYear':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+        default:
+            return 0;
+    }
+
+    try {
+        const { db } = await connectToDatabase();
+        const count = await db.collection('articles').countDocuments({
+            authorId: userId,
+            publishedDate: { $gte: startDate }
+        });
+        return count;
+    } catch (error) {
+        console.error(`Error fetching post count for user ${userId} for period ${period}:`, error);
+        return 0;
+    }
+}
+
+export async function getTopUserPostActivity(limit: number = 5): Promise<any[]> {
+    try {
+        const { db } = await connectToDatabase();
+        const users = await getAllUsers();
+        const activity = [];
+
+        const todayStart = new Date();
+        todayStart.setHours(0,0,0,0);
+
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        weekStart.setHours(0,0,0,0);
+        
+        const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+
+
+        for (const user of users) {
+            if (!user.id) continue;
+            const postsToday = await db.collection('articles').countDocuments({ authorId: user.id, publishedDate: { $gte: todayStart }});
+            const postsThisWeek = await db.collection('articles').countDocuments({ authorId: user.id, publishedDate: { $gte: weekStart }});
+            const postsThisMonth = await db.collection('articles').countDocuments({ authorId: user.id, publishedDate: { $gte: monthStart }});
+            
+            if (postsToday > 0 || postsThisWeek > 0 || postsThisMonth > 0) { // Only include users with some activity
+                 activity.push({
+                    userId: user.id,
+                    username: user.username,
+                    postsToday,
+                    postsThisWeek,
+                    postsThisMonth
+                });
+            }
+        }
+        // Sort by most posts this month, then week, then today for tie-breaking
+        activity.sort((a,b) => b.postsThisMonth - a.postsThisMonth || b.postsThisWeek - a.postsThisWeek || b.postsToday - a.postsToday);
+        return activity.slice(0, limit);
+
+    } catch (error) {
+        console.error("Error fetching top user post activity:", error);
+        return [];
+    }
+}

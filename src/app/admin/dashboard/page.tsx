@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PlusCircle, Edit, Trash2, Loader2 } from "lucide-react";
-import { formatInTimeZone } from 'date-fns-tz'; // Import formatInTimeZone
+import { PlusCircle, Edit, Trash2, Loader2, BarChartBig, Users, FileText, Zap, Activity, CalendarClock, Eye } from "lucide-react";
+import { formatInTimeZone } from 'date-fns-tz';
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -22,22 +22,28 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm"; // Correct import
-import type { NewsArticle, CreateNewsArticleData } from "@/lib/types"; // Import CreateNewsArticleData
+import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm";
+import type { NewsArticle, CreateNewsArticleData, DashboardAnalytics } from "@/lib/types";
 import {
   getAllNewsArticles,
   addNewsArticle,
   updateNewsArticle,
   deleteNewsArticle,
-  // Remove CreateNewsArticleData from here if it's only a type
+  getDashboardAnalytics, // Import the new analytics function
+  getTopUserPostActivity
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
+import AnalyticsCard from "@/components/admin/AnalyticsCard"; // Import the new AnalyticsCard
 
 const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
 export default function DashboardPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
+  const [topUsersActivity, setTopUsersActivity] = useState<any[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
@@ -48,24 +54,40 @@ export default function DashboardPage() {
 
   const { toast } = useToast();
 
+  const fetchDashboardData = useCallback(async () => {
+    setIsAnalyticsLoading(true);
+    try {
+      const [analyticsData, topUsers] = await Promise.all([
+        getDashboardAnalytics(),
+        getTopUserPostActivity(5) // Fetch top 5 users
+      ]);
+      setAnalytics(analyticsData);
+      setTopUsersActivity(topUsers);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch dashboard analytics.", variant: "destructive" });
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  }, [toast]);
+
   const fetchArticles = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedArticles = await getAllNewsArticles();
-      // Ensure fetchedArticles is an array before sorting
       const safeArticles = Array.isArray(fetchedArticles) ? fetchedArticles : [];
       setArticles(safeArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch articles.", variant: "destructive" });
-      setArticles([]); // Set to empty array on error
+      setArticles([]);
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
+    fetchDashboardData();
     fetchArticles();
-  }, [fetchArticles]);
+  }, [fetchDashboardData, fetchArticles]);
 
   const handleAddArticle = () => {
     setEditingArticle(null);
@@ -88,7 +110,8 @@ export default function DashboardPage() {
     try {
       const success = await deleteNewsArticle(articleToDelete.id);
       if (success) {
-        await fetchArticles(); // Refresh articles from DB
+        await fetchArticles(); 
+        await fetchDashboardData(); // Refresh analytics
         toast({ title: "Success", description: "Article deleted successfully." });
       } else {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
@@ -108,7 +131,6 @@ export default function DashboardPage() {
     setIsSubmitting(true);
     try {
       if (editingArticle) {
-         // Prepare data for update, excluding id and publishedDate
          const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = {
             title: data.title,
             content: data.content,
@@ -117,6 +139,13 @@ export default function DashboardPage() {
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
             inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
+            metaTitle: data.metaTitle,
+            metaDescription: data.metaDescription,
+            metaKeywords: data.metaKeywords?.split(',').map(k => k.trim()).filter(k => k),
+            ogTitle: data.ogTitle,
+            ogDescription: data.ogDescription,
+            ogImage: data.ogImage,
+            canonicalUrl: data.canonicalUrl,
          };
         const result = await updateNewsArticle(editingArticle.id, updateData);
         if (result) {
@@ -125,7 +154,6 @@ export default function DashboardPage() {
            toast({ title: "Error", description: "Failed to update article.", variant: "destructive" });
         }
       } else {
-         // Prepare data for creation matching CreateNewsArticleData type
          const createData: CreateNewsArticleData = {
             title: data.title,
             content: data.content,
@@ -134,6 +162,13 @@ export default function DashboardPage() {
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
             inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
+            metaTitle: data.metaTitle,
+            metaDescription: data.metaDescription,
+            metaKeywords: data.metaKeywords?.split(',').map(k => k.trim()).filter(k => k),
+            ogTitle: data.ogTitle,
+            ogDescription: data.ogDescription,
+            ogImage: data.ogImage,
+            canonicalUrl: data.canonicalUrl,
          };
         const result = await addNewsArticle(createData);
          if (result) {
@@ -142,7 +177,8 @@ export default function DashboardPage() {
             toast({ title: "Error", description: "Failed to add article.", variant: "destructive" });
         }
       }
-      await fetchArticles(); // Refresh articles from DB
+      await fetchArticles(); 
+      await fetchDashboardData(); // Refresh analytics
       setIsAddEditDialogOpen(false);
       setEditingArticle(null);
     } catch (error) {
@@ -154,8 +190,7 @@ export default function DashboardPage() {
     }
   };
 
-
-  if (isLoading) {
+  if (isLoading || isAnalyticsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -165,6 +200,72 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-8">
+      {/* Analytics Overview Section */}
+      <Card className="shadow-lg rounded-xl mb-8">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
+            <BarChartBig /> Site Overview
+          </CardTitle>
+          <CardDescription>A quick look at your site's key metrics.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {analytics ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <AnalyticsCard title="Total Articles" value={analytics.totalArticles.toString()} icon={FileText} />
+              <AnalyticsCard title="Articles Today" value={analytics.articlesToday.toString()} icon={CalendarClock} />
+              <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
+              <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
+              
+              {/* Placeholder for Visitor Stats - requires backend implementation */}
+              <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              <AnalyticsCard title="Active Visitors Now" value={analytics.visitorStats?.activeNow?.toString() ?? "N/A"} icon={Activity} description="Requires tracking setup" />
+              <AnalyticsCard title="Visitors This Week" value={analytics.visitorStats?.thisWeek.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              <AnalyticsCard title="Visitors This Month" value={analytics.visitorStats?.thisMonth.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+
+            </div>
+          ) : (
+             <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* User Post Activity Section - Placeholder */}
+      {topUsersActivity.length > 0 && (
+        <Card className="shadow-lg rounded-xl mb-8">
+            <CardHeader>
+                <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
+                    <Users /> Top User Activity
+                </CardTitle>
+                <CardDescription>Most active users by post count (requires author tracking).</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Username</TableHead>
+                            <TableHead>Posts Today</TableHead>
+                            <TableHead>Posts This Week</TableHead>
+                            <TableHead>Posts This Month</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {topUsersActivity.map(user => (
+                            <TableRow key={user.userId}>
+                                <TableCell>{user.username}</TableCell>
+                                <TableCell>{user.postsToday}</TableCell>
+                                <TableCell>{user.postsThisWeek}</TableCell>
+                                <TableCell>{user.postsThisMonth}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                 <p className="text-xs text-muted-foreground mt-2">Note: User post activity relies on articles being associated with authors (authorId).</p>
+            </CardContent>
+        </Card>
+      )}
+
+
+      {/* Manage News Articles Section */}
       <Card className="shadow-lg rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -229,10 +330,9 @@ export default function DashboardPage() {
               {editingArticle ? "Modify the details of the existing article." : "Fill in the details to create a new news article."}
             </DialogDescription>
           </DialogHeader>
-          {/* Render ArticleForm only when dialog is open to ensure correct default values */}
           {isAddEditDialogOpen && (
             <ArticleForm
-              article={editingArticle} // Pass the article to edit or null for new
+              article={editingArticle}
               onSubmit={handleFormSubmit}
               onCancel={() => {
                   setIsAddEditDialogOpen(false);

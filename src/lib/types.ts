@@ -10,6 +10,7 @@ export interface NewsArticle {
   imageUrl?: string;
   dataAiHint?: string; // For picsum placeholder images
   inlineAdSnippets?: string[]; // For AdSense/Adsterra snippets within content, associated with [AD_INLINE] placeholders
+  authorId?: string; // ID of the user who created/updated the article
 
   // SEO Fields
   metaTitle?: string;
@@ -113,4 +114,37 @@ export interface UserSession {
   permissions: Permission[];
   isEnvAdmin: boolean; // True if logged in via .env credentials
   isAuthenticated: boolean;
+}
+
+// --- Analytics Types ---
+export interface PeriodStats {
+  today: number;
+  yesterday?: number;
+  thisWeek?: number;
+  thisMonth?: number;
+  lastMonth?: number;
+  thisYear?: number;
+}
+
+export interface UserActivity {
+  userId: string;
+  username: string;
+  postsToday: number;
+  postsThisWeek: number;
+  postsThisMonth: number;
+}
+
+export interface DashboardAnalytics {
+  totalArticles: number;
+  articlesToday: number;
+  totalUsers: number;
+  activeGadgets: number;
+  visitorStats?: { // Optional as it requires separate tracking
+    today: number;
+    activeNow?: number; // e.g. last 15 mins
+    thisWeek: number;
+    thisMonth: number;
+    lastMonth: number;
+  };
+  userPostActivity?: UserActivity[]; // Top active users or specific user stats
 }
