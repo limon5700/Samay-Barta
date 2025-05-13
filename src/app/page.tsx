@@ -19,12 +19,13 @@ export default function HomePage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [activeGadgets, setActiveGadgets] = useState<Record<LayoutSection, Gadget[]>>({
     'homepage-top': [],
-    'article-top': [], // Not directly used on homepage but part of type
-    'article-bottom': [], // Not directly used on homepage
+    'homepage-content-bottom': [], // Added new section
+    'article-top': [], 
+    'article-bottom': [], 
     'sidebar-left': [],
     'sidebar-right': [],
     'footer': [],
-    'article-inline': [], // Not directly used on homepage
+    'article-inline': [], 
     'header-logo-area': [],
     'below-header': [],
   });
@@ -47,6 +48,7 @@ export default function HomePage() {
 
         const sectionsToFetch: LayoutSection[] = [
           'homepage-top',
+          'homepage-content-bottom', // Added new section
           'sidebar-left',
           'sidebar-right',
           'footer',
@@ -112,31 +114,27 @@ export default function HomePage() {
 
   const PageSkeleton = () => (
     <div className="flex flex-col min-h-screen">
-      {/* Header Skeleton (simplified) */}
       <Skeleton className="h-16 w-full mb-4 rounded-none" />
       
-      {/* Top Gadget Skeleton */}
       <div className="container mx-auto px-4">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" />
+        <Skeleton className="h-24 w-full mb-6 rounded-md" /> {/* Homepage Top Skeleton */}
       </div>
 
       <div className="container mx-auto px-4 flex-grow">
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Sidebar Skeleton */}
-          <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-4">
+        <div className="space-y-8"> {/* Linear flow for skeletons */}
+          {/* Left Sidebar Content Skeleton */}
+          <div className="w-full space-y-4">
             <Skeleton className="h-48 w-full rounded-md" />
             <Skeleton className="h-32 w-full rounded-md" />
-          </aside>
+          </div>
 
           {/* Main Content Area Skeleton */}
-          <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
-            {/* Category Filter Skeleton */}
+          <div className="w-full">
             <div className="mb-8 flex flex-wrap gap-2 justify-center">
               {[...Array(5)].map((_, i) => <Skeleton key={`cat-skel-${i}`} className="h-10 w-24 rounded-md" />)}
             </div>
-            {/* News List Skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
                 <div key={`news-skel-${i}`} className="flex flex-col space-y-3 p-4 border rounded-lg shadow-sm bg-card">
                   <Skeleton className="h-40 w-full rounded-xl" />
                   <div className="space-y-2 pt-2">
@@ -150,18 +148,24 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right Sidebar Skeleton */}
-          <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-4">
+          {/* Homepage Content Bottom Skeleton (for 2 ads) */}
+          <div className="w-full space-y-4">
+            <Skeleton className="h-24 w-full rounded-md" />
+            <Skeleton className="h-24 w-full rounded-md" />
+          </div>
+
+          {/* Right Sidebar Content Skeleton */}
+          <div className="w-full space-y-4">
             <Skeleton className="h-64 w-full rounded-md" />
             <Skeleton className="h-40 w-full rounded-md" />
-          </aside>
+          </div>
         </div>
       </div>
-      {/* Footer Gadget & Footer Skeleton */}
+      
       <div className="container mx-auto px-4 mt-8">
-        <Skeleton className="h-24 w-full mb-6 rounded-md" />
+        <Skeleton className="h-24 w-full mb-6 rounded-md" /> {/* Footer Gadget Skeleton */}
       </div>
-      <Skeleton className="h-16 w-full mt-4 rounded-none" />
+      <Skeleton className="h-16 w-full mt-4 rounded-none" /> {/* Footer Component Skeleton */}
     </div>
   );
 
@@ -178,24 +182,26 @@ export default function HomePage() {
         ) : (
           <>
             {renderGadgetsForSection('homepage-top', 'mb-8')}
-            <div className="flex flex-col md:flex-row gap-8">
-              {/* Left Sidebar */}
-              <aside className="w-full md:w-1/4 lg:w-1/5 order-2 md:order-1 space-y-6">
+            
+            <div className="space-y-8"> {/* Main container for linear flow */}
+              
+              {/* Left Sidebar Content - now part of the main flow */}
+              <div className="w-full">
                 {renderGadgetsForSection('sidebar-left')}
                 {activeGadgets['sidebar-left']?.length === 0 && (
-                  <Card className="p-4 bg-muted/30 hidden md:block"> {/* Hide placeholder on small screens if empty */}
+                  <Card className="p-4 bg-muted/30 hidden md:block">
                     <CardHeader className="p-0 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Left Sidebar</CardTitle>
+                      <CardTitle className="text-sm text-muted-foreground">Left Area</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                       <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
                     </CardContent>
                   </Card>
                 )}
-              </aside>
+              </div>
 
-              {/* Main Content Area */}
-              <div className="w-full md:w-1/2 lg:w-3/5 order-1 md:order-2">
+              {/* Main News Content Area */}
+              <div className="w-full">
                 <CategoryFilter
                   categories={allNewsCategories}
                   selectedCategory={selectedCategory}
@@ -210,20 +216,25 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* Right Sidebar */}
-              <aside className="w-full md:w-1/4 lg:w-1/5 order-3 md:order-3 space-y-6">
+              {/* New: Homepage Content Bottom Ads (e.g., for 2 ads consecutively) */}
+              <div className="w-full mt-8"> {/* Added margin-top for spacing */}
+                {renderGadgetsForSection('homepage-content-bottom')}
+              </div>
+
+              {/* Right Sidebar Content - now part of the main flow */}
+              <div className="w-full mt-8"> {/* Added margin-top for spacing */}
                 {renderGadgetsForSection('sidebar-right')}
                 {activeGadgets['sidebar-right']?.length === 0 && (
-                   <Card className="p-4 bg-muted/30 hidden md:block"> {/* Hide placeholder on small screens if empty */}
+                   <Card className="p-4 bg-muted/30 hidden md:block">
                      <CardHeader className="p-0 pb-2">
-                       <CardTitle className="text-sm text-muted-foreground">Right Sidebar</CardTitle>
+                       <CardTitle className="text-sm text-muted-foreground">Right Area</CardTitle>
                      </CardHeader>
                      <CardContent className="p-0">
                        <p className="text-xs text-muted-foreground">No gadgets configured for this section.</p>
                      </CardContent>
                    </Card>
                 )}
-              </aside>
+              </div>
             </div>
           </>
         )}
@@ -234,3 +245,4 @@ export default function HomePage() {
     </div>
   );
 }
+

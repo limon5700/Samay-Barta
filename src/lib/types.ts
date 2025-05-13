@@ -16,14 +16,15 @@ export type Category = "Technology" | "Sports" | "Business" | "World" | "Enterta
 // Renamed AdPlacement to LayoutSection for clarity, matching Blogger's concept
 export type LayoutSection =
   | 'homepage-top'
+  | 'homepage-content-bottom' // Added new section for ads after articles on homepage
   | 'article-top'
   | 'article-bottom'
   | 'sidebar-left'
   | 'sidebar-right'
   | 'footer'
   | 'article-inline' // This section might be used globally for default inline ads if not specified in article
-  | 'header-logo-area' // Example new section if needed
-  | 'below-header' // Example new section if needed
+  | 'header-logo-area'
+  | 'below-header'
   ;
 
 // Renamed Advertisement to Gadget, simplified for HTML/JS content
@@ -47,3 +48,4 @@ export type CreateGadgetData = Omit<Gadget, 'id' | 'createdAt'>;
 // export type AdType = 'custom' | 'external';
 // export interface Advertisement { ... old structure ... }
 // export type CreateAdvertisementData = Omit<Advertisement, 'id' | 'createdAt'>;
+

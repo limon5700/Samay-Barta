@@ -30,11 +30,12 @@ const layoutStructure: { name: string; section: LayoutSection; description: stri
   { name: "Header Area", section: 'header-logo-area', description: "Gadgets below the site title/logo." },
   { name: "Below Header", section: 'below-header', description: "Full width area below the header." },
   { name: "Homepage Top", section: 'homepage-top', description: "Area above the main content on the homepage." },
-  { name: "Sidebar Left", section: 'sidebar-left', description: "Left sidebar on homepage and article pages." },
-  { name: "Sidebar Right", section: 'sidebar-right', description: "Right sidebar on homepage and article pages." },
+  { name: "Homepage Content Bottom", section: 'homepage-content-bottom', description: "Area below the main article list on the homepage (for 1-2 ads)." },
+  { name: "Sidebar Left", section: 'sidebar-left', description: "Left sidebar/area on homepage and article pages." },
+  { name: "Sidebar Right", section: 'sidebar-right', description: "Right sidebar/area on homepage and article pages." },
   { name: "Article Top", section: 'article-top', description: "Area above the content on article pages." },
   { name: "Article Bottom", section: 'article-bottom', description: "Area below the content on article pages." },
-   { name: "Article Inline (Default)", section: 'article-inline', description: "Default ad shown for [AD_INLINE] if not set in article." },
+  { name: "Article Inline (Default)", section: 'article-inline', description: "Default ad shown for [AD_INLINE] if not set in article." },
   { name: "Footer", section: 'footer', description: "Site footer area." },
 ];
 
@@ -315,3 +316,4 @@ export default function LayoutEditorPage() {
     </div>
   );
 }
+
