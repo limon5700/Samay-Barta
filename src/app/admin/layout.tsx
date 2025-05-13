@@ -39,19 +39,18 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Layout Editor
               </Link>
             </Button>
+             <Button variant="ghost" size="sm" asChild>
+              <Link href="/admin/users">
+                <Users className="h-4 w-4 mr-2" />
+                User Management
+              </Link>
+            </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/seo">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 SEO Management
               </Link>
             </Button>
-            {/* Placeholder for User Management - Full implementation is complex and out of scope for this update */}
-            {/* <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/users">
-                <Users className="h-4 w-4 mr-2" />
-                User Management
-              </Link>
-            </Button> */}
             <form action={logoutAction}>
               <Button variant="destructive" size="sm" type="submit" className="gap-1.5">
                 <LogOut className="h-4 w-4" />
@@ -68,3 +67,4 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </div>
   );
 }
+
