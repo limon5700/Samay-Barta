@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<NewsArticle | null>(null);
@@ -53,42 +55,85 @@ export default function DashboardPage() {
 
   const { toast } = useToast();
 
+  const errorExplanationCard = (
+     <Card className="mb-6 border-destructive bg-destructive/10 dark:bg-destructive/20">
+        <CardHeader>
+            <CardTitle className="text-lg text-destructive-foreground dark:text-destructive-foreground/90">Important: Resolving Dashboard Access Issues</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-destructive-foreground/90 dark:text-destructive-foreground/80 space-y-2">
+            {pageError && (
+              <p className="font-semibold border-b pb-2 mb-2">Specific Error: {pageError}</p>
+            )}
+            <p>
+                If the dashboard is blank or not loading correctly (you might see a "Server Components render" error in logs or a white screen), please check the following:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Environment Variables:</strong> Ensure <code>MONGODB_URI</code>, <code>GEMINI_API_KEY</code>, <code>ADMIN_USERNAME</code>, and <code>ADMIN_PASSWORD</code> are correctly set in your <code>.env</code> file (for local development) and in your Vercel project settings (for deployed versions). The <code>MONGODB_URI</code> must be complete and not contain placeholders like <code>&lt;username&gt;</code>.</li>
+                <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist includes your local IP and Vercel's IPs. Check if your MongoDB cluster is running and accessible. Incorrect credentials in the URI can also cause connection failures.</li>
+                <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> is valid and has not exceeded its quota.</li>
+                <li><strong>Server Logs:</strong> Check your Vercel deployment logs (or local terminal output if running <code>npm run dev</code>) for more detailed error messages from the server. These logs often contain the specific reason for a "Server Components render" failure.</li>
+                <li><strong>Browser Extensions:</strong> Errors in the browser console related to <code>extensions.aitopia.ai</code> or similar domains are likely caused by browser extensions (like Aitopia) and are not part of this application. They can usually be ignored for diagnosing dashboard loading issues.</li>
+            </ul>
+             <p>
+                If issues persist after checking these, the server logs are the most crucial source for diagnosing the underlying problem.
+            </p>
+        </CardContent>
+     </Card>
+  );
+
   const fetchDashboardData = useCallback(async () => {
     setIsAnalyticsLoading(true);
+    setPageError(null);
     try {
       const [analyticsData, topUsersData] = await Promise.all([
         getDashboardAnalytics(),
         getTopUserPostActivity(5) 
       ]);
+      
       setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
       setTopUsersActivity(topUsersData ?? []);
+
     } catch (error) {
-      toast({ title: "Error", description: "Failed to fetch dashboard analytics.", variant: "destructive" });
+      const msg = error instanceof Error ? error.message : "An unknown error occurred";
+      console.error("Failed to fetch dashboard analytics:", error);
+      toast({ title: "Error", description: `Failed to fetch dashboard analytics: ${msg}`, variant: "destructive" });
       setAnalytics({ totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
       setTopUsersActivity([]);
+      setPageError(`Analytics fetch failed: ${msg}`);
     } finally {
       setIsAnalyticsLoading(false);
     }
   }, [toast]);
 
   const fetchArticles = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoading(true); // This controls the main article list loading
+    setPageError(null);
     try {
       const fetchedArticles = await getAllNewsArticles();
       const safeArticles = Array.isArray(fetchedArticles) ? fetchedArticles : [];
       setArticles(safeArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
     } catch (error) {
-      toast({ title: "Error", description: "Failed to fetch articles.", variant: "destructive" });
+      const msg = error instanceof Error ? error.message : "An unknown error occurred";
+      console.error("Failed to fetch articles:", error);
+      toast({ title: "Error", description: `Failed to fetch articles: ${msg}`, variant: "destructive" });
       setArticles([]);
+      setPageError(`Articles fetch failed: ${msg}`);
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    fetchDashboardData();
-    fetchArticles();
+    // Initial data fetch
+    Promise.all([fetchDashboardData(), fetchArticles()]).catch(err => {
+        // This catch is for overall promise resolution, individual errors are handled within functions
+        console.error("Error during initial data fetch for dashboard:", err);
+        setPageError("An error occurred during initial page load. Check console and server logs.");
+        setIsLoading(false);
+        setIsAnalyticsLoading(false);
+    });
   }, [fetchDashboardData, fetchArticles]);
+
 
   const handleAddArticle = () => {
     setEditingArticle(null);
@@ -111,8 +156,7 @@ export default function DashboardPage() {
     try {
       const success = await deleteNewsArticle(articleToDelete.id);
       if (success) {
-        await fetchArticles(); 
-        await fetchDashboardData(); 
+        await Promise.all([fetchArticles(), fetchDashboardData()]);
         toast({ title: "Success", description: "Article deleted successfully." });
       } else {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
@@ -184,58 +228,39 @@ export default function DashboardPage() {
             toast({ title: "Error", description: "Failed to add article.", variant: "destructive" });
         }
       }
-      await fetchArticles(); 
-      await fetchDashboardData(); 
+      await Promise.all([fetchArticles(), fetchDashboardData()]);
       setIsAddEditDialogOpen(false);
       setEditingArticle(null);
     } catch (error) {
        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
        console.error("Error saving article:", error);
        toast({ title: "Error", description: `An error occurred while saving the article: ${errorMessage}`, variant: "destructive" });
+       setPageError(`Saving article failed: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
   };
   
-  const errorExplanation = (
-     <Card className="mb-6 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
-        <CardHeader>
-            <CardTitle className="text-lg text-yellow-800 dark:text-yellow-300">Note on Console Errors &amp; Page Display</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-yellow-700 dark:text-yellow-200 space-y-2">
-            <p>
-                If you see errors in your browser's developer console related to <code>extensions.aitopia.ai</code> or similar domains not controlled by this application, these are likely caused by a browser extension you have installed (e.g., Aitopia). These errors are not part of Samay Barta Lite and can usually be ignored or resolved by managing your browser extensions.
-            </p>
-            <p>
-                If this Dashboard page, or other admin pages, appear blank or don't load correctly (showing "An error occurred in the Server Components render" on a white screen), and there are no other specific errors in the console directly related to the application's files (e.g., <code>dashboard/page.tsx</code>, <code>lib/data.ts</code>, <code>lib/mongodb.ts</code>), the issue might be due to:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Environment Variables:</strong> Crucial environment variables (like <code>MONGODB_URI</code> or <code>GEMINI_API_KEY</code>) might be missing or incorrect in your Vercel project settings (or your local <code>.env</code> file). Ensure they are correctly set and that the <code>MONGODB_URI</code> does not contain any placeholder values like <code>&lt;username&gt;</code> or <code>&lt;cluster-url&gt;</code>.</li>
-                <li><strong>Database Connectivity:</strong> There could be an issue connecting to your MongoDB database (e.g., incorrect credentials in the URI, IP allowlist on MongoDB Atlas not configured for Vercel, or network issues).</li>
-                <li><strong>API Key Issues:</strong> The <code>GEMINI_API_KEY</code> might be invalid or have exceeded its quota.</li>
-                <li><strong>Server-Side Errors:</strong> An unhandled error might be occurring in one of the server actions called by this page. Check Vercel deployment logs for more specific error messages from the server.</li>
-            </ul>
-             <p>
-                Ensure all environment variables are correctly configured in your Vercel project dashboard for the deployed version to function correctly.
-            </p>
-        </CardContent>
-     </Card>
-  );
 
-  if (isLoading || isAnalyticsLoading) {
+  if (isLoading || isAnalyticsLoading || pageError) {
     return (
       <div className="container mx-auto py-8">
-        {errorExplanation}
-        <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
+        {errorExplanationCard}
+        {(isLoading || isAnalyticsLoading) && !pageError && (
+          <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-4 text-lg text-muted-foreground">Loading dashboard data...</p>
+          </div>
+        )}
       </div>
     );
   }
 
+
   return (
     <div className="container mx-auto py-8">
-      {errorExplanation}
+      {errorExplanationCard}
+      
       <Card className="shadow-lg rounded-xl mb-8">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
@@ -309,7 +334,7 @@ export default function DashboardPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {articles.length === 0 ? (
+          {articles.length === 0 && !isLoading ? ( // Added !isLoading to prevent showing "No articles" during load
             <p className="text-center text-muted-foreground py-10">No articles found. Add one to get started!</p>
           ) : (
             <Table>
@@ -326,7 +351,7 @@ export default function DashboardPage() {
                   <TableRow key={article.id}>
                     <TableCell className="font-medium">{article.title}</TableCell>
                     <TableCell>{article.category}</TableCell>
-                    <TableCell>{formatInTimeZone(new Date(article.publishedDate), DHAKA_TIMEZONE, "MMM d, yyyy, h:mm a zzz")}</TableCell>
+                    <TableCell>{article.publishedDate ? formatInTimeZone(new Date(article.publishedDate), DHAKA_TIMEZONE, "MMM d, yyyy, h:mm a zzz") : 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleEditArticle(article)} className="mr-2 hover:text-primary">
                         <Edit className="h-4 w-4" />
@@ -405,3 +430,4 @@ export default function DashboardPage() {
       </Dialog>
     </div>
   );
+}
