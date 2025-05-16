@@ -24,11 +24,9 @@ if (!INITIAL_ENV_ADMIN_USERNAME || !INITIAL_ENV_ADMIN_PASSWORD) {
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string }> {
   console.log("loginAction: Invoked.");
 
-  // Directly access process.env inside the function for up-to-date values
   const currentEnvAdminUsername = process.env.ADMIN_USERNAME;
   const currentEnvAdminPassword = process.env.ADMIN_PASSWORD;
 
-  // Log the values as seen by this server action at runtime
   console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentEnvAdminUsername}'`);
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentEnvAdminPassword ? 'set (length: ' + currentEnvAdminPassword.length + ')' : 'NOT SET'}`);
 
@@ -38,7 +36,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
-    // 1. Try .env admin credentials first (if configured and accessible at runtime)
     if (currentEnvAdminUsername && currentEnvAdminPassword) {
       if (username === currentEnvAdminUsername && password === currentEnvAdminPassword) {
         cookies().set(SESSION_COOKIE_NAME, "env_admin:" + currentEnvAdminUsername, {
@@ -49,26 +46,25 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-        return { success: true };
+        redirect("/admin/dashboard"); // Redirect directly
+        // The line below is technically unreachable due to redirect, 
+        // but satisfies the function's Promise return type for other paths.
+        // It won't be executed if redirect() works.
+        // return { success: true }; 
       } else {
         console.log("loginAction: Admin login via .env credentials FAILED - username/password mismatch.");
         console.log(`loginAction: Provided username: '${username}', Runtime .env username: '${currentEnvAdminUsername}'`);
-        // Avoid logging passwords directly, but confirm if they were set
         console.log(`loginAction: Provided password was ${password ? 'set' : 'NOT set'}. Runtime .env password was ${currentEnvAdminPassword ? 'set' : 'NOT set'}.`);
       }
     } else {
         console.error("loginAction: Admin login via .env credentials SKIPPED - process.env.ADMIN_USERNAME or process.env.ADMIN_PASSWORD is not set or falsy at runtime within loginAction.");
     }
 
-    // 2. Try database user
     console.log("loginAction: Attempting database user login for:", username);
     const user = await getUserByUsername(username);
 
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
-      // In a real app, compare hashed passwords:
-      // const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-      // For simplicity, direct comparison (INSECURE FOR PRODUCTION):
       const passwordMatch = password === user.passwordHash; 
 
       if (passwordMatch) {
@@ -81,7 +77,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Database user session cookie set for user_id:", user.id);
-        return { success: true };
+        redirect("/admin/dashboard"); // Redirect directly
+        // Unreachable code after redirect
+        // return { success: true };
       } else {
         console.log("loginAction: Database user password MISMATCH for:", username);
       }
@@ -95,6 +93,10 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
+    // This handles the error thrown by redirect() and allows Next.js to process it.
+    if (typeof e.digest === 'string' && e.digest.startsWith('NEXT_REDIRECT')) {
+      throw e;
+    }
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
     return { success: false, error: `An unexpected server error occurred. Please check server logs. Details: ${e.message}` };
   }
@@ -110,8 +112,9 @@ export async function getSession(): Promise<UserSession | null> {
   const sessionCookieValue = cookies().get(SESSION_COOKIE_NAME)?.value;
   console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
-  if (!sessionCookieValue) {
-    console.log("getSession: No session cookie found.");
+  // Explicitly check if the cookie value is the string 'undefined'
+  if (!sessionCookieValue || sessionCookieValue === 'undefined') {
+    console.log("getSession: No session cookie found or cookie value is 'undefined'.");
     return null;
   }
 
@@ -194,4 +197,3 @@ export async function getSession(): Promise<UserSession | null> {
   cookies().delete(SESSION_COOKIE_NAME);
   return null;
 }
-
