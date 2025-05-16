@@ -9,29 +9,41 @@ import { headers } from 'next/headers'; // Import headers
 
 // Helper function to check if user has a specific permission
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
-  if (!session) return false;
-  if (session.isEnvAdmin) return true; // .env admin has all permissions
-  return session.permissions?.includes(permission as any) || false;
+  console.log(`hasPermission Check: Attempting to check permission '${permission}'. Session isAuthenticated: ${session?.isAuthenticated}, isEnvAdmin: ${session?.isEnvAdmin}`);
+  if (!session || !session.isAuthenticated) {
+    console.log(`hasPermission Result for '${permission}': No session or not authenticated. Returning false.`);
+    return false;
+  }
+  if (session.isEnvAdmin) {
+    console.log(`hasPermission Result for '${permission}': Session isEnvAdmin is true. Returning true.`);
+    return true; // .env admin has all permissions
+  }
+  const hasPerm = session.permissions?.includes(permission as Permission) || false;
+  console.log(`hasPermission Result for '${permission}': User permission found in array: ${hasPerm}. Returning ${hasPerm}. Permissions array: ${JSON.stringify(session.permissions)}`);
+  return hasPerm;
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const headerList = headers();
-  const pathname = headerList.get('next-url') || ''; // Get current pathname
+  const pathname = headerList.get('next-url') || '';
+  console.log("AdminLayout: Rendering for pathname:", pathname);
 
   let session: UserSession | null = null;
 
   // Only attempt to get session if not on the login page itself
   if (pathname !== '/admin/login') {
     try {
+      console.log("AdminLayout: Attempting to call getSession().");
       session = await getSession();
+      console.log("AdminLayout: Session object received:", JSON.stringify(session, null, 2));
     } catch (error) {
       console.error("CRITICAL: Error fetching session in AdminLayout:", error);
-      // In a production scenario, you might want to redirect to an error page or show a generic error message.
-      // For now, this will log the error on the server. The page might still fail to render correctly.
-      session = null; // Treat as no session if an error occurs
+      session = null; 
     }
+  } else {
+    console.log("AdminLayout: On /admin/login page, getSession() call was skipped for layout rendering.");
   }
-  // For the /admin/login page, session remains null, which is appropriate for the layout.
+  
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
