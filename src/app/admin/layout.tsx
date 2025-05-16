@@ -1,10 +1,11 @@
+
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3, ShieldCheck } from 'lucide-react'; // Added ShieldCheck for roles
+import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3, ShieldCheck } from 'lucide-react';
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
-import { redirect } from 'next/navigation';
-import type { UserSession } from '@/lib/types';
+import type { UserSession, Permission } from '@/lib/types';
+import { headers } from 'next/headers'; // Import headers
 
 // Helper function to check if user has a specific permission
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
@@ -14,21 +15,23 @@ const hasPermission = (session: UserSession | null, permission: string): boolean
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const headerList = headers();
+  const pathname = headerList.get('next-url') || ''; // Get current pathname
+
   let session: UserSession | null = null;
-  try {
-    session = await getSession();
-  } catch (error) {
-    console.error("CRITICAL: Error fetching session in AdminLayout:", error);
-    // In a production scenario, you might want to redirect to an error page or show a generic error message.
-    // For now, this will log the error on the server. The page might still fail to render correctly or redirect via middleware.
+
+  // Only attempt to get session if not on the login page itself
+  if (pathname !== '/admin/login') {
+    try {
+      session = await getSession();
+    } catch (error) {
+      console.error("CRITICAL: Error fetching session in AdminLayout:", error);
+      // In a production scenario, you might want to redirect to an error page or show a generic error message.
+      // For now, this will log the error on the server. The page might still fail to render correctly.
+      session = null; // Treat as no session if an error occurs
+    }
   }
-
-  // If no session and trying to access admin area (not login page), redirect
-  // This logic is mostly handled by middleware, but double check here.
-  // This specific check is problematic in server component environment and typically handled by middleware
-  // if (!session?.isAuthenticated && typeof window !== 'undefined') { 
-  // }
-
+  // For the /admin/login page, session remains null, which is appropriate for the layout.
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -97,4 +100,3 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </div>
   );
 }
-
