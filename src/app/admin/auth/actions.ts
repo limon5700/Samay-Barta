@@ -80,6 +80,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           path: "/",
           sameSite: "lax",
         });
+        console.log("loginAction: Database user session cookie set for user_id:", user.id);
         return { success: true };
       } else {
         console.log("loginAction: Database user password MISMATCH for:", username);
@@ -100,56 +101,73 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 }
 
 export async function logoutAction() {
+  console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookies().delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
 }
 
 export async function getSession(): Promise<UserSession | null> {
   const sessionCookieValue = cookies().get(SESSION_COOKIE_NAME)?.value;
-  if (!sessionCookieValue) return null;
+  console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
-  const envAdminUser = process.env.ADMIN_USERNAME; // Use current process.env value
+  if (!sessionCookieValue) {
+    console.log("getSession: No session cookie found.");
+    return null;
+  }
+
+  const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
+  console.log(`getSession: Runtime process.env.ADMIN_USERNAME for comparison: '${runtimeEnvAdminUsername}'`);
 
   if (sessionCookieValue.startsWith("env_admin:")) {
-    const username = sessionCookieValue.split(":")[1];
-    if (envAdminUser && username === envAdminUser) { // Check against current ENV_ADMIN_USERNAME
+    const cookieUsername = sessionCookieValue.split(":")[1];
+    console.log(`getSession: Found 'env_admin:' prefixed cookie. Username from cookie: '${cookieUsername}'`);
+    if (runtimeEnvAdminUsername && cookieUsername === runtimeEnvAdminUsername) {
+        console.log("getSession: env_admin session validated successfully. Granting SuperAdmin (ENV) permissions.");
         const allPermissions: Permission[] = [
             'manage_articles', 'publish_articles', 'manage_users', 'manage_roles', 
             'manage_layout_gadgets', 'manage_seo_global', 'manage_settings', 'view_admin_dashboard'
         ];
         return {
-            username: envAdminUser,
+            username: runtimeEnvAdminUsername,
             roles: ["SuperAdmin (ENV)"],
             permissions: allPermissions,
             isEnvAdmin: true,
             isAuthenticated: true,
         };
     }
-    console.warn("getSession: Invalid env_admin cookie - username mismatch or process.env.ADMIN_USERNAME not set at runtime.");
-    cookies().delete(SESSION_COOKIE_NAME); // Clear invalid cookie
+    console.warn(`getSession: Invalid env_admin cookie. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. Or, runtimeEnvAdminUsername is not set. Clearing cookie.`);
+    cookies().delete(SESSION_COOKIE_NAME);
     return null;
   }
 
   if (sessionCookieValue.startsWith("user_id:")) {
     const userId = sessionCookieValue.split(":")[1];
+    console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
-        console.warn("getSession: Invalid user_id cookie - no user ID found after colon.");
+        console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
         cookies().delete(SESSION_COOKIE_NAME);
         return null;
     }
 
     try {
+      console.log(`getSession: Attempting to fetch database user by ID: '${userId}'`);
       const user = await getUserById(userId);
       if (user && user.isActive) {
+        console.log(`getSession: Database user '${user.username}' (ID: ${userId}) found and is active. Fetching permissions.`);
         const permissions = await getPermissionsForUser(user.id);
         const roleNames = [];
         if (user.roles) {
+          console.log(`getSession: User roles IDs: ${user.roles.join(', ')}. Fetching role names.`);
           for (const roleId of user.roles) {
               const role = await getRoleById(roleId);
-              if (role) roleNames.push(role.name);
+              if (role) {
+                roleNames.push(role.name);
+              } else {
+                console.warn(`getSession: Role with ID '${roleId}' not found for user '${user.username}'.`);
+              }
           }
         }
-
+        console.log(`getSession: User '${user.username}' session validated. Roles: ${roleNames.join(', ') || 'None'}. Permissions count: ${permissions.length}`);
         return {
           userId: user.id,
           username: user.username,
@@ -159,13 +177,12 @@ export async function getSession(): Promise<UserSession | null> {
           isAuthenticated: true,
         };
       }
-      // User not found or inactive
-      if (!user) console.warn(`getSession: User with ID '${userId}' not found.`);
-      if (user && !user.isActive) console.warn(`getSession: User '${user.username}' is inactive.`);
+      if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
+      if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
       
     } catch (e: any) {
-        console.error("getSession: Error fetching session details for user ID:", userId, e.message, e.stack);
-        cookies().delete(SESSION_COOKIE_NAME); // Clear cookie on error
+        console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
+        cookies().delete(SESSION_COOKIE_NAME);
         return null;
     }
     // If user not found or inactive after try block, clear cookie
@@ -173,7 +190,8 @@ export async function getSession(): Promise<UserSession | null> {
     return null;
   }
   
-  console.warn("getSession: Invalid session cookie format:", sessionCookieValue);
-  cookies().delete(SESSION_COOKIE_NAME); // Clear invalid cookie
+  console.warn(`getSession: Cookie format invalid or unhandled. Cookie value: '${sessionCookieValue}'. Clearing cookie.`);
+  cookies().delete(SESSION_COOKIE_NAME);
   return null;
 }
+
