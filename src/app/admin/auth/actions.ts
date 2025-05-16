@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { cookies } from "next/headers";
@@ -36,24 +35,31 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   }
 
   // 2. Try database user
-  const user = await getUserByUsername(username);
+  try {
+    const user = await getUserByUsername(username);
 
-  if (user && user.isActive) {
-    // In a real app, compare hashed passwords:
-    // const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-    // For simplicity, direct comparison (INSECURE FOR PRODUCTION):
-    const passwordMatch = password === user.passwordHash; 
+    if (user && user.isActive) {
+      // In a real app, compare hashed passwords:
+      // const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      // For simplicity, direct comparison (INSECURE FOR PRODUCTION):
+      const passwordMatch = password === user.passwordHash; 
 
-    if (passwordMatch) {
-      cookies().set(SESSION_COOKIE_NAME, `user_id:${user.id}`, { // Store user ID
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        path: "/",
-        sameSite: "lax",
-      });
-      return { success: true };
+      if (passwordMatch) {
+        cookies().set(SESSION_COOKIE_NAME, `user_id:${user.id}`, { // Store user ID
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          path: "/",
+          sameSite: "lax",
+        });
+        return { success: true };
+      }
     }
+  } catch (e: any) {
+    console.error("Error during database user login attempt:", e);
+    // Return a more specific error to the client, but avoid leaking too much detail.
+    // The actual error `e.message` will be in the server logs.
+    return { success: false, error: "A server error occurred during login. Please try again later or contact support if the issue persists." };
   }
   
   return { success: false, error: "Invalid username or password." };
@@ -92,25 +98,32 @@ export async function getSession(): Promise<UserSession | null> {
     const userId = sessionCookieValue.split(":")[1];
     if (!userId) return null;
 
-    const user = await getUserById(userId);
-    if (user && user.isActive) {
-      const permissions = await getPermissionsForUser(user.id);
-      const roleNames = [];
-      if (user.roles) {
-        for (const roleId of user.roles) {
-            const role = await getRoleById(roleId);
-            if (role) roleNames.push(role.name);
+    try {
+      const user = await getUserById(userId);
+      if (user && user.isActive) {
+        const permissions = await getPermissionsForUser(user.id);
+        const roleNames = [];
+        if (user.roles) {
+          for (const roleId of user.roles) {
+              const role = await getRoleById(roleId);
+              if (role) roleNames.push(role.name);
+          }
         }
-      }
 
-      return {
-        userId: user.id,
-        username: user.username,
-        roles: roleNames,
-        permissions,
-        isEnvAdmin: false,
-        isAuthenticated: true,
-      };
+        return {
+          userId: user.id,
+          username: user.username,
+          roles: roleNames,
+          permissions,
+          isEnvAdmin: false,
+          isAuthenticated: true,
+        };
+      }
+    } catch (e: any) {
+        console.error("Error fetching session details for user ID:", userId, e);
+        // If there's an error fetching user details (e.g., DB issue), treat as unauthenticated
+        cookies().delete(SESSION_COOKIE_NAME);
+        return null;
     }
     // User not found or inactive, clear cookie
     cookies().delete(SESSION_COOKIE_NAME);
