@@ -5,53 +5,77 @@ import { Button } from '@/components/ui/button';
 import { Home, Newspaper, LogOut, Layout, Settings, Users, BarChart3, ShieldCheck } from 'lucide-react';
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import type { UserSession, Permission } from '@/lib/types';
-import { headers } from 'next/headers'; // Import headers
+import { headers } from 'next/headers';
+import { URL } from 'url'; // For robust pathname parsing
 
 // Helper function to check if user has a specific permission
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
-  console.log(`hasPermission Check: Attempting to check permission '${permission}'. Session isAuthenticated: ${session?.isAuthenticated}, isEnvAdmin: ${session?.isEnvAdmin}`);
+  // console.log(`hasPermission Check: Attempting to check permission '${permission}'. Session isAuthenticated: ${session?.isAuthenticated}, isEnvAdmin: ${session?.isEnvAdmin}`);
   if (!session || !session.isAuthenticated) {
-    console.log(`hasPermission Result for '${permission}': No session or not authenticated. Returning false.`);
+    // console.log(`hasPermission Result for '${permission}': No session or not authenticated. Returning false.`);
     return false;
   }
   if (session.isEnvAdmin) {
-    console.log(`hasPermission Result for '${permission}': Session isEnvAdmin is true. Returning true.`);
+    // console.log(`hasPermission Result for '${permission}': Session isEnvAdmin is true. Returning true.`);
     return true; // .env admin has all permissions
   }
   const hasPerm = session.permissions?.includes(permission as Permission) || false;
-  console.log(`hasPermission Result for '${permission}': User permission found in array: ${hasPerm}. Returning ${hasPerm}. Permissions array: ${JSON.stringify(session.permissions)}`);
+  // console.log(`hasPermission Result for '${permission}': User permission found in array: ${hasPerm}. Returning ${hasPerm}. Permissions array: ${JSON.stringify(session.permissions)}`);
   return hasPerm;
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const headerList = headers();
-  const pathname = headerList.get('next-url') || '';
-  console.log("AdminLayout: Rendering for pathname:", pathname);
+  // Use 'x-invoke-path' if available (more specific for the actual path being invoked)
+  // Fallback to 'next-url' which contains the full request URL.
+  const invokePathHeader = headerList.get('x-invoke-path');
+  const nextUrlHeader = headerList.get('next-url') || '/'; // Default to root if header is missing
+  
+  let actualPathname = '';
+
+  if (invokePathHeader) {
+    actualPathname = invokePathHeader; // x-invoke-path usually doesn't have query params
+    console.log("AdminLayout: Using 'x-invoke-path' header:", actualPathname);
+  } else {
+    try {
+      // Create a dummy base URL if nextUrlHeader is just a path to correctly parse it
+      const fullUrl = nextUrlHeader.startsWith('/') ? `http://localhost${nextUrlHeader}` : nextUrlHeader;
+      actualPathname = new URL(fullUrl).pathname;
+      console.log("AdminLayout: Using 'next-url' header. Full: '", nextUrlHeader, "', Parsed pathname:", actualPathname);
+    } catch (e) {
+      console.error("AdminLayout: Error parsing 'next-url' header:", nextUrlHeader, e);
+      actualPathname = nextUrlHeader.split('?')[0]; // Basic fallback for pathname extraction
+      console.log("AdminLayout: Fallback pathname extraction:", actualPathname);
+    }
+  }
+  
+  console.log("AdminLayout: Final determined pathname for session logic:", actualPathname);
 
   let session: UserSession | null = null;
 
-  // Only attempt to get session if not on the login page itself
-  if (pathname !== '/admin/login') {
+  if (actualPathname === '/admin/login') {
+    console.log("AdminLayout: Path IS /admin/login. SKIPPING getSession() call for layout rendering.");
+    // Session remains null, which is intended for the login page layout
+  } else {
+    console.log(`AdminLayout: Path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
     try {
-      console.log("AdminLayout: Attempting to call getSession().");
       session = await getSession();
-      console.log("AdminLayout: Session object received:", JSON.stringify(session, null, 2));
+      console.log("AdminLayout: Session object received:", session ? JSON.stringify(session, null, 2) : "null");
     } catch (error) {
-      console.error("CRITICAL: Error fetching session in AdminLayout:", error);
+      console.error("AdminLayout: CRITICAL Error fetching session:", error);
       session = null; 
     }
-  } else {
-    console.log("AdminLayout: On /admin/login page, getSession() call was skipped for layout rendering.");
   }
   
+  const isAuthenticated = session?.isAuthenticated || false;
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-2">
-        <Link href={session?.isAuthenticated ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity">
+        <Link href={isAuthenticated ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity">
           Samay Barta Lite - Admin
         </Link>
-        {session?.isAuthenticated && (
+        {isAuthenticated && (
           <nav className="ml-auto flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" asChild>
               <Link href="/">
@@ -81,7 +105,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             {(hasPermission(session, 'manage_users') || hasPermission(session, 'manage_roles')) && (
                 <Button variant="ghost" size="sm" asChild>
                 <Link href="/admin/users">
-                    <Users className="h-4 w-4 mr-2" /> {/* Combined for simplicity now */}
+                    <Users className="h-4 w-4 mr-2" />
                     User & Role Mgmt
                 </Link>
                 </Button>
