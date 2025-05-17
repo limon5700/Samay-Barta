@@ -46,11 +46,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-        redirect("/admin/dashboard"); // Redirect directly
-        // The line below is technically unreachable due to redirect, 
-        // but satisfies the function's Promise return type for other paths.
-        // It won't be executed if redirect() works.
-        // return { success: true }; 
+        redirect("/admin/dashboard"); 
       } else {
         console.log("loginAction: Admin login via .env credentials FAILED - username/password mismatch.");
         console.log(`loginAction: Provided username: '${username}', Runtime .env username: '${currentEnvAdminUsername}'`);
@@ -65,6 +61,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
+      // IMPORTANT: In a real app, use bcrypt.compare(password, user.passwordHash)
       const passwordMatch = password === user.passwordHash; 
 
       if (passwordMatch) {
@@ -77,9 +74,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Database user session cookie set for user_id:", user.id);
-        redirect("/admin/dashboard"); // Redirect directly
-        // Unreachable code after redirect
-        // return { success: true };
+        redirect("/admin/dashboard");
       } else {
         console.log("loginAction: Database user password MISMATCH for:", username);
       }
@@ -93,7 +88,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
-    // This handles the error thrown by redirect() and allows Next.js to process it.
     if (typeof e.digest === 'string' && e.digest.startsWith('NEXT_REDIRECT')) {
       throw e;
     }
@@ -109,21 +103,34 @@ export async function logoutAction() {
 }
 
 export async function getSession(): Promise<UserSession | null> {
-  const sessionCookieValue = cookies().get(SESSION_COOKIE_NAME)?.value;
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const sessionCookieValue = sessionCookie?.value;
+
   console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
-  // Explicitly check if the cookie value is the string 'undefined'
-  if (!sessionCookieValue || sessionCookieValue === 'undefined') {
-    console.log("getSession: No session cookie found or cookie value is 'undefined'.");
+  if (!sessionCookieValue) {
+    console.log("getSession: No session cookie found (value is primitive undefined).");
+    return null;
+  }
+  
+  // Explicitly check if the cookie value is the string 'undefined' which can sometimes happen
+  if (sessionCookieValue === 'undefined') {
+    console.log("getSession: Session cookie value is the literal string 'undefined'. Treating as no session. Consider clearing this problematic cookie if it persists.");
+    // Potentially delete if it's the string 'undefined' as it's an invalid state
+    // cookieStore.delete(SESSION_COOKIE_NAME);
+    // console.log("getSession: Deleted cookie that had string 'undefined' value to prevent further issues.");
     return null;
   }
 
-  const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
-  console.log(`getSession: Runtime process.env.ADMIN_USERNAME for comparison: '${runtimeEnvAdminUsername}'`);
 
   if (sessionCookieValue.startsWith("env_admin:")) {
     const cookieUsername = sessionCookieValue.split(":")[1];
     console.log(`getSession: Found 'env_admin:' prefixed cookie. Username from cookie: '${cookieUsername}'`);
+    
+    const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
+    console.log(`getSession: Runtime process.env.ADMIN_USERNAME for env_admin check: '${runtimeEnvAdminUsername}'`);
+
     if (runtimeEnvAdminUsername && cookieUsername === runtimeEnvAdminUsername) {
         console.log("getSession: env_admin session validated successfully. Granting SuperAdmin (ENV) permissions.");
         const allPermissions: Permission[] = [
@@ -137,10 +144,11 @@ export async function getSession(): Promise<UserSession | null> {
             isEnvAdmin: true,
             isAuthenticated: true,
         };
+    } else {
+      console.warn(`getSession: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. This could be due to process.env.ADMIN_USERNAME not being available/mismatching. Clearing cookie.`);
+      cookieStore.delete(SESSION_COOKIE_NAME);
+      return null;
     }
-    console.warn(`getSession: Invalid env_admin cookie. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. Or, runtimeEnvAdminUsername is not set. Clearing cookie.`);
-    cookies().delete(SESSION_COOKIE_NAME);
-    return null;
   }
 
   if (sessionCookieValue.startsWith("user_id:")) {
@@ -148,7 +156,7 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
-        cookies().delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -180,20 +188,21 @@ export async function getSession(): Promise<UserSession | null> {
           isAuthenticated: true,
         };
       }
+      // If user not found or inactive, clear cookie
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
+      cookieStore.delete(SESSION_COOKIE_NAME);
+      return null;
       
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        cookies().delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
-    // If user not found or inactive after try block, clear cookie
-    cookies().delete(SESSION_COOKIE_NAME);
-    return null;
   }
   
   console.warn(`getSession: Cookie format invalid or unhandled. Cookie value: '${sessionCookieValue}'. Clearing cookie.`);
-  cookies().delete(SESSION_COOKIE_NAME);
+  cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
+
