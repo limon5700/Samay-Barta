@@ -26,17 +26,18 @@ const hasPermission = (session: UserSession | null, permission: string): boolean
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const headerList = headers();
-  // Use 'x-invoke-path' if available (more specific for the actual path being invoked)
-  // Fallback to 'next-url' which contains the full request URL.
   const invokePathHeader = headerList.get('x-invoke-path');
-  const nextUrlHeader = headerList.get('next-url') || '/'; // Default to root if header is missing
+  const nextUrlHeader = headerList.get('next-url');
   
-  let actualPathname = '';
+  console.log(`AdminLayout: Raw x-invoke-path header: '${invokePathHeader}'`);
+  console.log(`AdminLayout: Raw next-url header: '${nextUrlHeader}'`);
+
+  let actualPathname = '/'; // Default to root if everything else fails
 
   if (invokePathHeader) {
-    actualPathname = invokePathHeader; // x-invoke-path usually doesn't have query params
-    console.log("AdminLayout: Using 'x-invoke-path' header:", actualPathname);
-  } else {
+    actualPathname = invokePathHeader;
+    console.log("AdminLayout: Using 'x-invoke-path' header as actualPathname:", actualPathname);
+  } else if (nextUrlHeader) {
     try {
       // Create a dummy base URL if nextUrlHeader is just a path to correctly parse it
       const fullUrl = nextUrlHeader.startsWith('/') ? `http://localhost${nextUrlHeader}` : nextUrlHeader;
@@ -44,9 +45,19 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       console.log("AdminLayout: Using 'next-url' header. Full: '", nextUrlHeader, "', Parsed pathname:", actualPathname);
     } catch (e) {
       console.error("AdminLayout: Error parsing 'next-url' header:", nextUrlHeader, e);
-      actualPathname = nextUrlHeader.split('?')[0]; // Basic fallback for pathname extraction
-      console.log("AdminLayout: Fallback pathname extraction:", actualPathname);
+      // Basic fallback for pathname extraction if URL parsing fails
+      const basePath = nextUrlHeader.split('?')[0];
+      actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`; // Ensure it starts with a slash
+      console.log("AdminLayout: Fallback pathname extraction from next-url:", actualPathname);
     }
+  } else {
+    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing. Defaulting actualPathname to '/'. This might indicate an issue.");
+  }
+  
+  // Ensure actualPathname is never an empty string; default to '/' if it somehow becomes empty.
+  if (actualPathname === '') {
+    console.warn("AdminLayout: actualPathname was empty, defaulting to '/'.");
+    actualPathname = '/';
   }
   
   console.log("AdminLayout: Final determined pathname for session logic:", actualPathname);
@@ -55,7 +66,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   if (actualPathname === '/admin/login') {
     console.log("AdminLayout: Path IS /admin/login. SKIPPING getSession() call for layout rendering.");
-    // Session remains null, which is intended for the login page layout
   } else {
     console.log(`AdminLayout: Path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
     try {
