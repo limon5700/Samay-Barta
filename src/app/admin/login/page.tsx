@@ -1,9 +1,8 @@
 
-
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +12,7 @@ import { loginAction } from "@/app/admin/auth/actions";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // To get redirect URL
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,17 +28,32 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
       
+      // loginAction now returns an object like { success: boolean, error?: string, redirectPath?: string }
       const result = await loginAction(formData);
 
-      if (result?.success) {
-        const redirectUrl = searchParams.get('redirect') || "/admin/dashboard";
-        router.push(redirectUrl);
-      } else {
+      if (result?.success && result.redirectPath) {
+        // If loginAction signals success and provides a redirectPath, navigate client-side
+        const redirectUrlFromParams = searchParams.get('redirect');
+        router.push(redirectUrlFromParams || result.redirectPath);
+      } else if (result?.success) {
+        // Fallback if redirectPath is somehow not provided but success is true
+        router.push("/admin/dashboard");
+      }
+      else {
         setError(result?.error || "Login failed. Please check your credentials.");
       }
-    } catch (err) {
-      console.error("Login error:", err);
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err: any) {
+      // Server actions that call redirect() throw an error with digest 'NEXT_REDIRECT'
+      // This catch block is important if loginAction still uses redirect() internally for other cases (e.g., logout)
+      // or if an unexpected error occurs that isn't NEXT_REDIRECT.
+      console.error("Login page handleSubmit error:", err);
+      if (err.digest?.startsWith('NEXT_REDIRECT')) {
+        // This case should ideally not be hit if loginAction returns success/redirectPath
+        // but kept for robustness if redirect() is called directly.
+        // The framework should handle the redirect.
+        return;
+      }
+      setError("An unexpected error occurred during login. Please try again. Details: " + (err.message || 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
