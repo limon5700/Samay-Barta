@@ -31,7 +31,6 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
     console.error("CRITICAL: ADMIN_PASSWORD is NOT SET in process.env at runtime. .env admin login will fail.");
     return { success: false, error: "Server admin password not configured. Contact administrator. (Error Code: ENV_ADMIN_PASS_MISSING_RUNTIME)" };
   }
-  // GEMINI_API_KEY is not strictly critical for login itself, so only a warning.
   if (!GEMINI_API_KEY_SET) {
     console.warn("WARNING: GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
   }
@@ -41,11 +40,9 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked. ABOUT TO CHECK ENV VARS.");
-  
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success) {
     console.error(`loginAction: Environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
-    // This error should be displayed on the login page by the client
     return { success: false, error: envCheckResult.error || "Server configuration error. Please contact administrator." };
   }
   console.log("loginAction: Environment variable check PASSED.");
@@ -63,7 +60,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   try {
     const cookieStore = await nextCookies();
 
-    // This check is vital. Ensure server itself has the credentials loaded.
     if (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword) {
         console.error(`loginAction: CRITICAL - Server-side ADMIN_USERNAME ('${currentRuntimeAdminUsername}') or ADMIN_PASSWORD (is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}) not configured properly at runtime. This should have been caught by checkRequiredEnvVars, but double-checking.`);
         return { success: false, error: "Server admin credentials are not configured properly. Please contact administrator. (Error Code: SERVER_ENV_ADMIN_MISSING_AT_LOGIN_INTERNAL)" };
@@ -82,7 +78,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Cookie for env_admin should be set. Admin login via .env credentials SUCCESSFUL for user:", username);
-        // Client-side will handle redirect based on this response
+        redirect("/admin/dashboard"); // Perform server-side redirect
+        // The redirect above should throw NEXT_REDIRECT, so this return is a fallback
+        // and the client-side should ideally not see this if redirect works as expected.
         return { success: true, redirectPath: "/admin/dashboard" }; 
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
@@ -90,14 +88,11 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       }
     }
     
-    // If username is not the .env admin, try database user
-    // This block is only reached if username !== currentRuntimeAdminUsername
     console.log("loginAction: Submitted username is not the .env admin. Proceeding to database user login check for:", username);
     const user = await getUserByUsername(username);
 
     if (user && user.isActive) {
         console.log(`loginAction: Database user '${username}' found and is active.`);
-        // INSECURE: plain text comparison. In a real app, use bcrypt.compare(password, user.passwordHash);
         const passwordMatch = password === user.passwordHash; 
 
         if (passwordMatch) {
@@ -110,7 +105,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
                 sameSite: "lax",
             });
             console.log("loginAction: Database user session cookie should be set for user_id:", user.id);
-            return { success: true, redirectPath: "/admin/dashboard" };
+            redirect("/admin/dashboard"); // Perform server-side redirect
+            return { success: true, redirectPath: "/admin/dashboard" }; // Fallback
         } else {
             console.log("loginAction: Database user password MISMATCH for:", username);
         }
@@ -124,13 +120,16 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
+    if (e.digest?.startsWith('NEXT_REDIRECT')) {
+      console.log("loginAction: Caught NEXT_REDIRECT, re-throwing.");
+      throw e; // Re-throw NEXT_REDIRECT to let Next.js handle it
+    }
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
     let errorMessage = e.message || "An unknown server error occurred.";
     if (e.name === 'MongoNetworkError' || e.message?.includes('connect ECONNREFUSED') || e.message?.includes('querySrv')) {
         console.error("loginAction: Database connection error suspected:", e.message);
         errorMessage = `Database connection error. Details: ${errorMessage} (Error Code: DB_CONN_FAIL)`;
     }
-    // This will be caught by the client's handleSubmit catch block
     return { success: false, error: `An unexpected server error occurred during login. Please check server logs. Details: ${errorMessage}` };
   }
 }
@@ -141,10 +140,9 @@ export async function logoutAction() {
   try {
     const cookieStore = await nextCookies();
     await cookieStore.delete(SESSION_COOKIE_NAME);
-    console.log("logoutAction: Session cookie deleted. Redirecting to /admin/login.");
+    console.log("logoutAction: Session cookie deleted.");
   } catch (error) {
     console.error("logoutAction: Error deleting session cookie:", error);
-    // Still attempt to redirect even if cookie deletion fails for some reason.
   }
   redirect("/admin/login");
 }
@@ -153,18 +151,10 @@ export async function getSession(): Promise<UserSession | null> {
   'use server';
   console.log("getSession: Invoked. ABOUT TO CHECK ENV VARS in getSession.");
 
-  // This check is crucial. If these are not available, session validation for env_admin will fail.
   const envCheckResult = checkRequiredEnvVars(); 
-  // For getSession, we proceed even if some non-critical vars are missing, but MONGODB_URI is essential for DB users.
-  // ADMIN_USERNAME/PASSWORD are essential if an env_admin cookie exists.
   if (!envCheckResult.success && (!process.env.MONGODB_URI || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD)) {
       console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are not configured properly. Cannot validate session. Error: ${envCheckResult.error || "Essential server config missing."}`);
-      // Do not delete cookie here, as the issue is server config, not necessarily a bad cookie.
       return null;
-  }
-  if (!envCheckResult.success && envCheckResult.error && !(envCheckResult.error.includes("ENV_ADMIN") || envCheckResult.error.includes("DB_CONNECT"))) {
-      // Log non-critical issues but proceed.
-      console.warn(`getSession: Non-critical environment variable issue during env check: ${envCheckResult.error}. Proceeding with session check.`);
   }
   
   let cookieStore;
@@ -172,7 +162,7 @@ export async function getSession(): Promise<UserSession | null> {
     cookieStore = await nextCookies();
   } catch (error) {
     console.error("getSession: Error calling nextCookies():", error);
-    return null; // Cannot proceed without cookie store
+    return null; 
   }
 
   const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
@@ -180,23 +170,21 @@ export async function getSession(): Promise<UserSession | null> {
   
   console.log(`getSession: Value of sessionCookie?.value upon read: '${sessionCookieValue}' (Type: ${typeof sessionCookieValue})`);
 
-
   if (!sessionCookieValue) {
     console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME} (cookie does not exist or value is null/primitive undefined).`);
     return null;
   }
   
-  if (sessionCookieValue === 'undefined') { // Literal string 'undefined'
-    console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had literal string 'undefined'. This is a serious issue indicating a problem with how the cookie was set or corrupted. Clearing cookie.`);
+  if (sessionCookieValue === 'undefined') { 
+    console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had literal string 'undefined'. This is a serious issue. Clearing cookie.`);
     await cookieStore.delete(SESSION_COOKIE_NAME);
     return null;
   }
 
   console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
-  // Re-fetch runtime env vars for validation, as their availability can be inconsistent in serverless.
   const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME; 
-  const runtimeEnvAdminPasswordSet = !!process.env.ADMIN_PASSWORD; // Check if password var exists
+  const runtimeEnvAdminPasswordSet = !!process.env.ADMIN_PASSWORD;
 
   console.log(`getSession: For env_admin check - Runtime process.env.ADMIN_USERNAME: '${runtimeEnvAdminUsername}'`);
   console.log(`getSession: For env_admin check - Runtime process.env.ADMIN_PASSWORD is ${runtimeEnvAdminPasswordSet ? 'SET' : 'NOT SET'}`);
@@ -206,9 +194,8 @@ export async function getSession(): Promise<UserSession | null> {
     const cookieUsername = sessionCookieValue.split(":")[1];
     console.log(`getSession: Found 'env_admin:' prefixed cookie. Username from cookie: '${cookieUsername}'`);
 
-    // If server doesn't have its admin credentials loaded AT THIS MOMENT, it cannot validate this cookie.
     if (!runtimeEnvAdminUsername || !runtimeEnvAdminPasswordSet) {
-        console.warn(`CRITICAL_SESSION_FAILURE: env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME ('${runtimeEnvAdminUsername}') or ADMIN_PASSWORD (is ${runtimeEnvAdminPasswordSet ? 'set' : 'NOT SET'}) is NOT properly configured/available at runtime during this getSession call. Cannot validate this session. Clearing cookie.`);
+        console.warn(`CRITICAL_SESSION_FAILURE: env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME ('${runtimeEnvAdminUsername}') or ADMIN_PASSWORD (is ${runtimeEnvAdminPasswordSet ? 'set' : 'NOT SET'}) is NOT properly configured/available at runtime. Cannot validate this session. Clearing cookie.`);
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
@@ -220,16 +207,14 @@ export async function getSession(): Promise<UserSession | null> {
             'manage_layout_gadgets', 'manage_seo_global', 'manage_settings', 'view_admin_dashboard'
         ];
         return {
-            username: runtimeEnvAdminUsername, // Use the runtime username
+            username: runtimeEnvAdminUsername,
             roles: ["SuperAdmin (ENV)"],
             permissions: allPermissions,
             isEnvAdmin: true,
             isAuthenticated: true,
         };
     } else {
-      // This case means the username in the cookie doesn't match the server's current ADMIN_USERNAME.
-      // This could be due to a change in .env ADMIN_USERNAME, or a stale/tampered cookie.
-      console.warn(`CRITICAL_SESSION_MISMATCH: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Server's runtime ADMIN_USERNAME: '${runtimeEnvAdminUsername}'. This indicates a mismatch or a stale cookie. Clearing cookie.`);
+      console.warn(`CRITICAL_SESSION_MISMATCH: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Server's runtime ADMIN_USERNAME: '${runtimeEnvAdminUsername}'. Clearing cookie.`);
       await cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
@@ -238,12 +223,11 @@ export async function getSession(): Promise<UserSession | null> {
   if (sessionCookieValue.startsWith("user_id:")) {
     const userId = sessionCookieValue.split(":")[1];
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
-    if (!userId) { // Check if userId is empty after split
+    if (!userId) { 
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
-    // MONGODB_URI must be available for database user sessions
     if (!process.env.MONGODB_URI) { 
         console.error("getSession: Cannot validate database user session because MONGODB_URI is not set. Clearing cookie.");
         await cookieStore.delete(SESSION_COOKIE_NAME);
@@ -281,7 +265,6 @@ export async function getSession(): Promise<UserSession | null> {
         };
       }
 
-      // If user not found or not active
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
       await cookieStore.delete(SESSION_COOKIE_NAME);
@@ -289,27 +272,24 @@ export async function getSession(): Promise<UserSession | null> {
 
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        await cookieStore.delete(SESSION_COOKIE_NAME); // Clear cookie on error
+        await cookieStore.delete(SESSION_COOKIE_NAME); 
         return null;
     }
   }
 
-  // If cookie format is neither 'env_admin:' nor 'user_id:'
-  console.warn(`getSession: Cookie format invalid or unhandled for value: '${sessionCookieValue}'. This may indicate a stale or malformed cookie. Clearing cookie.`);
+  console.warn(`getSession: Cookie format invalid or unhandled for value: '${sessionCookieValue}'. Clearing cookie.`);
   await cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
 
-// New server action to check env vars from client
 export async function checkServerVarsAction(): Promise<Record<string, string | boolean>> {
     "use server";
-    // This action is intended to be called from the client to diagnose server-side env var availability.
     console.log("checkServerVarsAction: Invoked from client.");
     const vars = {
         MONGODB_URI_IS_SET: !!process.env.MONGODB_URI,
         ADMIN_USERNAME_IS_SET: !!process.env.ADMIN_USERNAME,
-        ADMIN_USERNAME_VALUE: process.env.ADMIN_USERNAME || "NOT SET", // Expose the value for direct comparison by admin
-        ADMIN_PASSWORD_IS_SET: !!process.env.ADMIN_PASSWORD, // Only check if set, not the value
+        ADMIN_USERNAME_VALUE: process.env.ADMIN_USERNAME || "NOT SET",
+        ADMIN_PASSWORD_IS_SET: !!process.env.ADMIN_PASSWORD,
         GEMINI_API_KEY_IS_SET: !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_API_KEY,
         NODE_ENV: process.env.NODE_ENV || "NOT SET",
         VERCEL_ENV: process.env.VERCEL_ENV || "NOT SET (Likely local or not on Vercel)",
@@ -317,3 +297,5 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
+
+    
