@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, LogIn, Loader2, ShieldCheck } from "lucide-react";
-import { loginAction, checkServerVarsAction } from "@/app/admin/auth/actions"; 
+import { loginAction, checkServerVarsAction } from "@/app/admin/auth/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router = useRouter(); // Keep for potential future use, though redirect is now server-side
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,36 +24,36 @@ export default function LoginPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    setServerVars(null); 
+    setServerVars(null);
     setIsLoading(true);
     console.log("LoginPage: handleSubmit invoked for user:", username);
-    
+
     try {
       const formData = new FormData();
       formData.append("username", username);
       formData.append("password", password);
-      
-      const result = await loginAction(formData);
-      console.log("LoginPage: loginAction raw result:", result);
 
-      if (result?.success && result.redirectPath) {
-        console.log("LoginPage: loginAction returned success, attempting client-side redirect to:", result.redirectPath);
-        router.push(result.redirectPath);
-        // setIsLoading will be false eventually if redirect succeeds and component unmounts
-        // or if an error occurs in router.push (though unlikely for simple paths)
-      } else if (result?.error) {
+      // loginAction will now handle the redirect itself upon success or throw an error
+      // which might include NEXT_REDIRECT.
+      const result = await loginAction(formData);
+
+      // This block will only be reached if loginAction returns an error object
+      // instead of redirecting or throwing NEXT_REDIRECT.
+      if (result?.error) {
         console.error("LoginPage: Login failed. Error from loginAction:", result.error);
         setError(result.error);
-        setIsLoading(false);
-      } else if (result?.success && !result.redirectPath) {
-         console.error("LoginPage: loginAction returned success but no redirectPath. This is unexpected.");
-         setError("Login succeeded but redirection failed. Please contact support.");
-         setIsLoading(false);
-      } else {
-        console.error("LoginPage: Login failed with an unexpected response format from loginAction:", result);
-        setError("Login failed. Please check credentials or server logs.");
-        setIsLoading(false);
+      } else if (result?.success === false) {
+        // Handle cases where success is explicitly false but no specific error message was given.
+        console.error("LoginPage: Login attempt was unsuccessful, but no specific error was returned.");
+        setError("Login failed. Please check your credentials.");
+      } else if (result?.success === true && !result.redirectPath) {
+        // This case should ideally not happen if loginAction always redirects on success
+        console.error("LoginPage: loginAction returned success but no redirectPath and did not redirect server-side. This is unexpected.");
+        setError("Login succeeded but redirection failed. Please contact support.");
       }
+      // If loginAction redirects successfully, this part of the code in handleSubmit
+      // will likely not execute as the browser navigates away.
+      // If it throws NEXT_REDIRECT, the catch block handles it.
 
     } catch (err: any) {
       console.error("LoginPage: handleSubmit caught an error during loginAction call or client-side processing:", err);
@@ -63,22 +63,39 @@ export default function LoginPage() {
       console.error("LoginPage: Error cause:", err.cause);
       console.error("LoginPage: Error digest (if any):", err.digest);
 
-      // NEXT_REDIRECT is not expected here anymore as loginAction should return an object
-      // if (err.digest?.startsWith('NEXT_REDIRECT')) {
-      //     console.log("LoginPage: NEXT_REDIRECT signal caught (unexpected here if loginAction returns object), navigation should be handled by Next.js.");
-      // } else {
-          let displayError = "An unexpected error occurred during login. Please try again.";
+      if (err.digest?.startsWith('NEXT_REDIRECT')) {
+          console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
+          // No need to setError or setIsLoading(false) here, browser will navigate.
+          // The component will unmount.
+          return; // Explicitly return to avoid further processing in this catch block.
+      } else {
+          let displayError = "An unexpected issue occurred with login. Please try again.";
           if (err.message) {
-             displayError = `Login failed: ${err.message}`; 
+             displayError = `Login failed: ${err.message}`;
           }
           if (err.message?.toLowerCase().includes('failed to fetch')) {
             displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
           }
           setError(displayError);
+      }
+    } finally {
+        // Only set isLoading to false if it's not a NEXT_REDIRECT situation
+        // (because if it is, the component will unmount anyway).
+        // However, to be safe, especially if the redirect logic changes,
+        // we can conditionally set it.
+        // A simple way: if an error was set, it means we didn't redirect.
+        if (error || (event.target && !event.defaultPrevented)) { // Check if error was set or if redirect didn't happen
+             setIsLoading(false);
+        }
+        // A more robust check would be to see if the NEXT_REDIRECT was caught.
+        // This is handled by the return in the catch block for NEXT_REDIRECT.
+        // So, if we reach here and NEXT_REDIRECT wasn't caught, we should set isLoading to false.
+        // To simplify, let's always set it here if not a NEXT_REDIRECT
+        if (!(typeof error === 'object' && error !== null && 'digest' in error && (error as any).digest?.startsWith('NEXT_REDIRECT'))) {
           setIsLoading(false);
-      // }
-    } 
-    // Removed finally block, setIsLoading(false) is handled in error/unexpected paths
+        }
+
+    }
   };
 
   const handleCheckServerVars = async () => {
@@ -176,7 +193,7 @@ export default function LoginPage() {
               {isLoading ? "Logging In..." : "Login"}
             </Button>
             <Button type="button" variant="outline" className="w-full gap-2" onClick={handleCheckServerVars} disabled={isLoading || isCheckingVars}>
-              {isCheckingVars ? <Loader2 className="animate-spin h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+              {isCheckingRVars ? <Loader2 className="animate-spin h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
               {isCheckingVars ? "Checking..." : "Check Server Configuration"}
             </Button>
           </CardFooter>
@@ -185,4 +202,3 @@ export default function LoginPage() {
     </div>
   );
 }
-    
