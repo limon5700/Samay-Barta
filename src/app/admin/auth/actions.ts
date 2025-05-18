@@ -11,12 +11,14 @@ import type { UserSession, Permission } from "@/lib/types";
 // import bcrypt from 'bcryptjs';
 
 // Module-level check for logging during server startup/build
+// This provides a snapshot of what was available when the module was loaded.
+// It's useful for comparison but the runtime check inside loginAction is more critical.
 const INITIAL_ENV_ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const INITIAL_ENV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 if (!INITIAL_ENV_ADMIN_USERNAME || !INITIAL_ENV_ADMIN_PASSWORD) {
   console.warn(
-    "Warning (module load): ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set in process.env. Fallback admin login might not function as expected if these are also unavailable at runtime in loginAction."
+    "Warning (module load): ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set in process.env during server startup/build. Fallback admin login might not function as expected if these are also unavailable at runtime in loginAction."
   );
 } else {
   console.log("Info (module load): ADMIN_USERNAME and ADMIN_PASSWORD appear to be set in process.env at module load time.");
@@ -26,18 +28,12 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log("loginAction: Invoked.");
   const cookieStore = cookies();
 
-  const currentEnvAdminUsername = process.env.ADMIN_USERNAME;
-  const currentEnvAdminPassword = process.env.ADMIN_PASSWORD;
+  // These are the critical runtime values from process.env when the action is executed.
+  const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
+  const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
-  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentEnvAdminUsername}'`);
-  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentEnvAdminPassword ? 'set (length: ' + currentEnvAdminPassword.length + ')' : 'NOT SET'}`);
-
-  if (!currentEnvAdminUsername || !currentEnvAdminPassword) {
-    console.error("loginAction: CRITICAL FAILURE - ADMIN_USERNAME or ADMIN_PASSWORD is NOT SET in the server environment at runtime. .env admin login is impossible.");
-    // Do not immediately return here if we want to allow database logins as a fallback.
-    // However, if the submitted username matches what the admin username *should* be,
-    // then it's a server misconfiguration for that specific login type.
-  }
+  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
+  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
     const username = formData.get("username") as string;
@@ -45,30 +41,47 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
-    // Attempt .env admin login only if server has .env credentials configured
-    if (currentEnvAdminUsername && currentEnvAdminPassword) {
-      if (username === currentEnvAdminUsername && password === currentEnvAdminPassword) {
-        cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentEnvAdminUsername, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 60 * 60 * 24 * 7, // 1 week
-          path: "/",
-          sameSite: "lax",
-        });
-        console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-        return { success: true, redirectPath: "/admin/dashboard" };
-      } else if (username === currentEnvAdminUsername) {
-        // Username matches .env admin, but password doesn't
-        console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
-        // Fall through to database check, or return specific error if preferred
+    // --- .ENV ADMIN LOGIN ATTEMPT ---
+    // Check if the server has .env admin credentials configured AT RUNTIME
+    if (currentRuntimeAdminUsername && currentRuntimeAdminPassword) {
+      // Server has .env credentials. Now check if submitted username matches.
+      if (username === currentRuntimeAdminUsername) {
+        // Submitted username matches the server's .env admin username.
+        // Now check the password.
+        if (password === currentRuntimeAdminPassword) {
+          // Password also matches. SUCCESS!
+          cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 60 * 60 * 24 * 7, // 1 week
+            path: "/",
+            sameSite: "lax",
+          });
+          console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
+          return { success: true, redirectPath: "/admin/dashboard" };
+        } else {
+          // Username matched .env admin, but password was incorrect.
+          console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
+          // For an explicit .env admin attempt, do not fall through to database check for this username.
+          return { success: false, error: "Invalid password for admin user." };
+        }
       }
-    } else if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) {
-      // User attempted to log in with what *should* be the .env admin username,
-      // but server doesn't have them configured at runtime.
-      console.error(`loginAction: User attempted to log in as .env admin ('${username}'), but server has no ADMIN_USERNAME/ADMIN_PASSWORD configured at runtime.`);
-      return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator." };
+      // If username does not match currentRuntimeAdminUsername, it's not an attempt to log in as the .env admin.
+      // So, we fall through to database user check.
+    } else {
+      // Server does NOT have .env admin credentials configured at runtime.
+      console.warn("loginAction: Server has no ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
+      // If the user *tried* to log in with a username that *might* have been intended as the .env admin
+      // (e.g., if INITIAL_ENV_ADMIN_USERNAME was set during build and matches submitted username),
+      // provide a specific error.
+      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) {
+         console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has no ADMIN_USERNAME/ADMIN_PASSWORD configured at runtime. This is a server configuration issue.`);
+         return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator." };
+      }
+      // Otherwise, it's a normal user login attempt, fall through to database check.
     }
 
+    // --- DATABASE USER LOGIN ATTEMPT ---
     console.log("loginAction: Proceeding to database user login check for:", username);
     const user = await getUserByUsername(username);
 
@@ -120,7 +133,6 @@ export async function getSession(): Promise<UserSession | null> {
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
-  // More detailed logging for the cookie value itself
   if (sessionCookieValue === undefined) {
     console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME} is primitive undefined.`);
   } else if (sessionCookieValue === null) {
@@ -130,7 +142,7 @@ export async function getSession(): Promise<UserSession | null> {
   }
 
 
-  if (!sessionCookieValue || sessionCookieValue === 'undefined') { // Handle both undefined primitive and string 'undefined'
+  if (!sessionCookieValue || sessionCookieValue === 'undefined') {
     console.log("getSession: No session cookie found or value is 'undefined'.");
     if (sessionCookieValue === 'undefined') {
         console.warn("getSession: Cookie value was literally 'undefined'. This might indicate an issue with cookie setting/retrieval or prior deletion.");
@@ -221,3 +233,5 @@ export async function getSession(): Promise<UserSession | null> {
   cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
+
+    
