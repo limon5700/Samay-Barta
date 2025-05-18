@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies as nextCookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -41,7 +41,7 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
 };
 
 
-export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
+export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string }> {
   console.log("loginAction: Invoked. ABOUT TO CHECK ENV VARS.");
   
   const envCheckResult = checkRequiredEnvVars();
@@ -57,7 +57,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? `set (length: ${currentRuntimeAdminPassword.length})` : 'NOT SET'}`);
 
   try {
-    const cookieStore = await cookies();
+    const cookieStore = await nextCookies();
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -73,7 +73,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
       if (password === currentRuntimeAdminPassword) {
         console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
-        cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
+        await cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -81,7 +81,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-        return { success: true, redirectPath: "/admin/dashboard" }; 
+        redirect("/admin/dashboard"); // Redirect on success
+        // Unreachable due to redirect, but good for type consistency if redirect was conditional
+        // return { success: true }; 
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
         return { success: false, error: "Invalid username or password." };
@@ -101,7 +103,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
         if (passwordMatch) {
             console.log("loginAction: Database user password MATCH for:", username);
-            cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
+            await cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             maxAge: 60 * 60 * 24 * 7, 
@@ -109,7 +111,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
             sameSite: "lax",
             });
             console.log("loginAction: Database user session cookie set for user_id:", user.id);
-            return { success: true, redirectPath: "/admin/dashboard" };
+            redirect("/admin/dashboard"); // Redirect on success
+            // Unreachable due to redirect
+            // return { success: true };
         } else {
             console.log("loginAction: Database user password MISMATCH for:", username);
         }
@@ -145,9 +149,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = await cookies();
+  const cookieStore = await nextCookies();
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  await cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
 }
 
@@ -161,15 +165,15 @@ export async function getSession(): Promise<UserSession | null> {
       return null;
   }
   
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const cookieStore = await nextCookies();
+  const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
   if (!sessionCookieValue || sessionCookieValue === 'undefined') {
     console.log(`getSession: No session cookie found or value is problematic (cookie for ${SESSION_COOKIE_NAME} does not exist, or value is '${sessionCookieValue}').`);
-    if (sessionCookieValue === 'undefined') {
-        console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} had string 'undefined'. This may indicate a prior issue. Ensuring cookie is cleared.`);
-        cookieStore.delete(SESSION_COOKIE_NAME);
+    if (sessionCookieValue === 'undefined') { // This condition is key
+        console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had string 'undefined'. This is a serious issue. Clearing cookie.`);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
     }
     return null;
   }
@@ -184,7 +188,7 @@ export async function getSession(): Promise<UserSession | null> {
 
     if (!runtimeEnvAdminUsername || !process.env.ADMIN_PASSWORD) {
         console.warn(`getSession: env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME or ADMIN_PASSWORD is NOT SET at runtime. Cannot validate. Clearing cookie.`);
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -203,7 +207,7 @@ export async function getSession(): Promise<UserSession | null> {
         };
     } else {
       console.warn(`getSession: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. This could be due to process.env.ADMIN_USERNAME not being available/mismatching at this execution, or a stale cookie. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME);
+      await cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
   }
@@ -213,12 +217,12 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
     if (!process.env.MONGODB_URI) { 
         console.error("getSession: Cannot validate database user session because MONGODB_URI is not set. Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -255,18 +259,18 @@ export async function getSession(): Promise<UserSession | null> {
 
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME);
+      await cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
 
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
   }
 
   console.warn(`getSession: Cookie format invalid or unhandled for value: '${sessionCookieValue}'. This may indicate a stale or malformed cookie. Clearing cookie.`);
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  await cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
 

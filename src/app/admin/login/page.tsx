@@ -33,47 +33,46 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
       
+      // loginAction will now throw NEXT_REDIRECT on success, or return an error object
       const result = await loginAction(formData);
-      console.log("LoginPage: loginAction raw result:", result); 
-
-      if (result?.success && result.redirectPath) {
-        console.log("LoginPage: Login successful, redirecting to:", result.redirectPath);
-        const redirectUrlFromParams = searchParams.get('redirect');
-        router.push(redirectUrlFromParams || result.redirectPath);
-      } else if (result?.success) {
-        console.warn("LoginPage: Login successful but redirectPath missing, redirecting to /admin/dashboard (fallback). Result:", result);
-        router.push("/admin/dashboard");
+      
+      // If loginAction returns (meaning it didn't redirect), it must be an error
+      if (result?.error) {
+        console.error("LoginPage: Login failed. Result error from action:", result.error);
+        setError(result.error);
+      } else if (result && !result.success) {
+        // Fallback for other non-successful returns, though loginAction should throw or return an error string
+        console.error("LoginPage: Login failed with an unexpected response:", result);
+        setError("Login failed. Please check your credentials or server logs.");
       } else {
-        const errorMessage = result?.error || "Login failed. Please check your credentials.";
-        console.error("LoginPage: Login failed. Result error from action:", errorMessage);
-        setError(errorMessage);
+        // This case should ideally not be reached if loginAction redirects on success or returns error object
+        console.warn("LoginPage: loginAction returned an unexpected successful response without redirecting. This shouldn't happen.");
+        setError("An unexpected issue occurred with login. Please try again.");
       }
+
     } catch (err: any) {
-      console.error("LoginPage: handleSubmit caught an unexpected error:", err);
+      console.error("LoginPage: handleSubmit caught an error:", err);
       console.error("LoginPage: Error name:", err.name);
       console.error("LoginPage: Error message:", err.message);
       console.error("LoginPage: Error stack:", err.stack);
       console.error("LoginPage: Error cause:", err.cause);
+      console.error("LoginPage: Error digest (if any):", err.digest);
 
-      let displayError = "An unexpected error occurred during login. Please try again.";
-      if (err.message) {
-        // Check if the error is about "NEXT_REDIRECT" - this isn't an error for the user.
-        if (err.message.includes('NEXT_REDIRECT')) {
-          // This is expected if the server action itself calls redirect.
-          // The page should be navigating. If it's not, the redirect in server action isn't working.
-          // No need to set an error for the user in this case.
-          console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be happening.");
-        } else {
+      // If it's a NEXT_REDIRECT error, Next.js will handle the redirect. Don't set an error state.
+      if (err.digest?.startsWith('NEXT_REDIRECT')) {
+        console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
+        // Do not set error, allow Next.js to handle the redirect
+      } else {
+        let displayError = "An unexpected error occurred during login. Please try again.";
+        if (err.message) {
            displayError += ` Details: ${err.message}`;
+        } else if (typeof err === 'string') {
+           displayError += ` Details: ${err}`;
         }
-      } else if (typeof err === 'string') {
-        displayError += ` Details: ${err}`;
-      }
-      
-      if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
-        displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
-      }
-      if(!err.message?.includes('NEXT_REDIRECT')) {
+        
+        if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
+          displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
+        }
         setError(displayError);
       }
     } finally {
