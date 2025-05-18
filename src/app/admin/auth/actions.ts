@@ -43,7 +43,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success) {
     console.error(`loginAction: Environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
-    // Return an object for the client to handle, as redirect might not work if basic env vars are missing.
     return { success: false, error: envCheckResult.error || "Server configuration error. Please contact administrator." };
   }
   console.log("loginAction: Environment variable check PASSED.");
@@ -79,7 +78,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Cookie for env_admin should be set. Admin login via .env credentials SUCCESSFUL for user:", username);
-        redirect("/admin/dashboard"); // Use server-side redirect
+        redirect("/admin/dashboard"); 
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
         return { success: false, error: "Invalid username or password." };
@@ -91,7 +90,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
         console.log(`loginAction: Database user '${username}' found and is active.`);
-        const passwordMatch = password === user.passwordHash; // Simplified for now
+        const passwordMatch = password === user.passwordHash; 
 
         if (passwordMatch) {
             console.log(`loginAction: Database user password MATCH for: ${username}. About to set cookie for user_id: ${user.id}`);
@@ -103,7 +102,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
                 sameSite: "lax",
             });
             console.log("loginAction: Database user session cookie should be set for user_id:", user.id);
-            redirect("/admin/dashboard"); // Use server-side redirect
+            redirect("/admin/dashboard"); 
         } else {
             console.log("loginAction: Database user password MISMATCH for:", username);
         }
@@ -150,8 +149,7 @@ export async function getSession(): Promise<UserSession | null> {
 
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success && (!process.env.MONGODB_URI || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD)) {
-      console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are not configured properly. Cannot validate session. Error: ${envCheckResult.error || "Essential server config missing."}`);
-      return null;
+      console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) might not be configured properly. Error: ${envCheckResult.error || "Essential server config missing."}`);
   }
 
   let cookieStore;
@@ -168,7 +166,7 @@ export async function getSession(): Promise<UserSession | null> {
   console.log(`getSession: Value of sessionCookie?.value upon read: '${sessionCookieValue}' (Type: ${typeof sessionCookieValue})`);
 
   if (!sessionCookieValue || sessionCookieValue === 'undefined') {
-    console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME} (cookie does not exist or value is null/primitive undefined).`);
+    console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME} (cookie does not exist, value is null, or value is primitive undefined: '${sessionCookieValue}').`);
     if (sessionCookieValue === 'undefined') {
         console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had literal string 'undefined'. This is a serious issue. Ensuring cookie is cleared.`);
         await cookieStore.delete(SESSION_COOKIE_NAME);
@@ -192,7 +190,7 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'env_admin:' prefixed cookie. Username from cookie: '${cookieUsername}'`);
 
     if (!runtimeEnvAdminUsername || !runtimeEnvAdminPasswordSet) {
-        console.warn(`CRITICAL_SESSION_FAILURE: env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME ('${runtimeEnvAdminUsername}') or ADMIN_PASSWORD (is ${runtimeEnvAdminPasswordSet ? 'set' : 'NOT SET'}) is NOT properly configured/available at runtime. Cannot validate this session. Clearing cookie.`);
+        console.warn(`CRITICAL_SESSION_FAILURE (env_admin check): env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME ('${runtimeEnvAdminUsername}') or ADMIN_PASSWORD (is ${runtimeEnvAdminPasswordSet ? 'set' : 'NOT SET'}) is NOT properly configured/available at runtime. Cannot validate this session. Clearing cookie.`);
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
@@ -211,7 +209,7 @@ export async function getSession(): Promise<UserSession | null> {
             isAuthenticated: true,
         };
     } else {
-      console.warn(`CRITICAL_SESSION_MISMATCH: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Server's runtime ADMIN_USERNAME: '${runtimeEnvAdminUsername}'. Clearing cookie.`);
+      console.warn(`CRITICAL_SESSION_MISMATCH (env_admin check): Cookie username: '${cookieUsername}', Server's runtime ADMIN_USERNAME: '${runtimeEnvAdminUsername}'. Clearing cookie.`);
       await cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
@@ -225,7 +223,7 @@ export async function getSession(): Promise<UserSession | null> {
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
-    if (!process.env.MONGODB_URI) {
+    if (!process.env.MONGODB_URI) { 
         console.error("getSession: Cannot validate database user session because MONGODB_URI is not set. Clearing cookie.");
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
@@ -294,3 +292,5 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
+
+    

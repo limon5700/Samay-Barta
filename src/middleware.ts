@@ -1,52 +1,40 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { SESSION_COOKIE_NAME } from '@/lib/auth-constants'; // Import cookie name
+import { SESSION_COOKIE_NAME } from '@/lib/auth-constants';
 
-// This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  console.log(`[Middleware] Pathname: ${pathname}`);
 
-  // Check if the path is for an admin route (excluding /admin/login itself)
-  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+  if (pathname === '/admin/login') {
+    console.log("[Middleware] Path is /admin/login, allowing request to proceed for login page rendering.");
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith('/admin')) {
+    const allCookies = request.cookies.getAll();
+    console.log(`[Middleware] Checking auth for ${pathname}. All cookies received:`, JSON.stringify(allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 20) + '...' })))); // Log truncated values for brevity
+    
     const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME);
-
-    // If there's no session cookie, redirect to the login page
-    if (!sessionCookie) {
+    
+    if (!sessionCookie || !sessionCookie.value || sessionCookie.value === 'undefined') {
+      console.log(`[Middleware] Session cookie (${SESSION_COOKIE_NAME}) NOT FOUND or value is problematic ('${sessionCookie?.value}') for path ${pathname}. Redirecting to login.`);
       const loginUrl = new URL('/admin/login', request.url);
-      // If trying to access dashboard or other admin page directly, add a redirect query param
-      if (pathname !== '/admin/login') {
-        loginUrl.searchParams.set('redirect', pathname);
-      }
+      loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
     }
     
-    // Add further token validation here if needed
-    // For example, decode and verify a JWT.
-    // If token is invalid, clear it and redirect.
-    // const isValidToken = await verifyToken(sessionCookie.value); // Placeholder
-    // if (!isValidToken) {
-    //   const response = NextResponse.redirect(new URL('/admin/login', request.url));
-    //   response.cookies.delete(SESSION_COOKIE_NAME);
-    //   return response;
-    // }
+    console.log(`[Middleware] Session cookie (${SESSION_COOKIE_NAME}) FOUND with value '${sessionCookie.value}' for path ${pathname}. Allowing request.`);
   }
 
   return NextResponse.next();
 }
 
-// See "Matching Paths" below to learn more
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - Public files in the public folder
-     */
-    '/admin/:path*', // Protects all routes under /admin
-    // Ensure other paths are not unintentionally matched if you add more general matchers
+    '/admin/:path*',
   ],
 };
+
+    

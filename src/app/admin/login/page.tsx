@@ -12,7 +12,7 @@ import { loginAction, checkServerVarsAction } from "@/app/admin/auth/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const router = useRouter(); // Keep for potential future use, though redirect is now server-side
+  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,30 +33,27 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
 
-      // loginAction will now handle the redirect itself upon success or throw an error
-      // which might include NEXT_REDIRECT.
       const result = await loginAction(formData);
+      console.log("LoginPage: loginAction raw result:", result);
 
-      // This block will only be reached if loginAction returns an error object
-      // instead of redirecting or throwing NEXT_REDIRECT.
+
       if (result?.error) {
         console.error("LoginPage: Login failed. Error from loginAction:", result.error);
         setError(result.error);
       } else if (result?.success === false) {
-        // Handle cases where success is explicitly false but no specific error message was given.
-        console.error("LoginPage: Login attempt was unsuccessful, but no specific error was returned.");
-        setError("Login failed. Please check your credentials.");
+        console.error("LoginPage: Login attempt was unsuccessful (success:false), but no specific error was returned from loginAction.");
+        setError("Login failed. Please check your credentials or server logs.");
       } else if (result?.success === true && !result.redirectPath) {
-        // This case should ideally not happen if loginAction always redirects on success
-        console.error("LoginPage: loginAction returned success but no redirectPath and did not redirect server-side. This is unexpected.");
-        setError("Login succeeded but redirection failed. Please contact support.");
+        // This case should ideally not happen if loginAction always calls redirect() upon success.
+        // If redirect() is used, it should throw NEXT_REDIRECT and be caught below.
+        console.error("LoginPage: loginAction returned success but no redirectPath, and did not throw NEXT_REDIRECT. This is unexpected.");
+        setError("Login succeeded but redirection mechanism failed. Please contact support.");
       }
-      // If loginAction redirects successfully, this part of the code in handleSubmit
-      // will likely not execute as the browser navigates away.
-      // If it throws NEXT_REDIRECT, the catch block handles it.
+      // If loginAction uses redirect(), it throws NEXT_REDIRECT which is caught below.
+      // If it successfully returns an object { success: true, redirectPath: ...}, that's an issue.
 
     } catch (err: any) {
-      console.error("LoginPage: handleSubmit caught an error during loginAction call or client-side processing:", err);
+      console.error("LoginPage: handleSubmit caught an error:", err);
       console.error("LoginPage: Error name:", err.name);
       console.error("LoginPage: Error message:", err.message);
       console.error("LoginPage: Error stack:", err.stack);
@@ -64,10 +61,11 @@ export default function LoginPage() {
       console.error("LoginPage: Error digest (if any):", err.digest);
 
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
-          console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
-          // No need to setError or setIsLoading(false) here, browser will navigate.
-          // The component will unmount.
-          return; // Explicitly return to avoid further processing in this catch block.
+          console.log("LoginPage: NEXT_REDIRECT signal caught from loginAction. Navigation should be handled by Next.js. Digest:", err.digest);
+          // No need to setError here. isLoading will be reset in finally if not unmounted.
+          // However, we return to ensure setIsLoading(false) in finally isn't prematurely called
+          // if the component unmounts due to redirect.
+          return;
       } else {
           let displayError = "An unexpected issue occurred with login. Please try again.";
           if (err.message) {
@@ -79,22 +77,11 @@ export default function LoginPage() {
           setError(displayError);
       }
     } finally {
-        // Only set isLoading to false if it's not a NEXT_REDIRECT situation
-        // (because if it is, the component will unmount anyway).
-        // However, to be safe, especially if the redirect logic changes,
-        // we can conditionally set it.
-        // A simple way: if an error was set, it means we didn't redirect.
-        if (error || (event.target && !event.defaultPrevented)) { // Check if error was set or if redirect didn't happen
-             setIsLoading(false);
-        }
-        // A more robust check would be to see if the NEXT_REDIRECT was caught.
-        // This is handled by the return in the catch block for NEXT_REDIRECT.
-        // So, if we reach here and NEXT_REDIRECT wasn't caught, we should set isLoading to false.
-        // To simplify, let's always set it here if not a NEXT_REDIRECT
-        if (!(typeof error === 'object' && error !== null && 'digest' in error && (error as any).digest?.startsWith('NEXT_REDIRECT'))) {
-          setIsLoading(false);
-        }
-
+      // This will run regardless of whether an error was caught or not,
+      // unless the catch block explicitly returned (like for NEXT_REDIRECT).
+      // If NEXT_REDIRECT occurred, the component might unmount before this runs, or it might run.
+      // Setting isLoading to false here is generally safe.
+      setIsLoading(false);
     }
   };
 
@@ -193,7 +180,7 @@ export default function LoginPage() {
               {isLoading ? "Logging In..." : "Login"}
             </Button>
             <Button type="button" variant="outline" className="w-full gap-2" onClick={handleCheckServerVars} disabled={isLoading || isCheckingVars}>
-              {isCheckingRVars ? <Loader2 className="animate-spin h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+              {isCheckingVars ? <Loader2 className="animate-spin h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
               {isCheckingVars ? "Checking..." : "Check Server Configuration"}
             </Button>
           </CardFooter>
@@ -202,3 +189,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    
