@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies } from "next/headers"; // Use cookies directly
+import { cookies as nextCookies } from "next/headers"; // Use cookies directly
 // Removed: import type { ReadonlyRequestCookies } from 'next/server'; 
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
@@ -12,6 +12,7 @@ import type { UserSession, Permission } from "@/lib/types";
 // import bcrypt from 'bcryptjs';
 
 // Module-level check for logging during server startup/build
+// These are read once when the module loads, primarily for comparison/logging if runtime env vars are missing
 const INITIAL_ENV_ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const INITIAL_ENV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -26,6 +27,7 @@ if (!INITIAL_ENV_ADMIN_USERNAME || !INITIAL_ENV_ADMIN_PASSWORD) {
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked.");
   
+  // Read environment variables AT RUNTIME within the action
   const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
   const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
@@ -33,7 +35,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
-    const cookieStore = cookies(); 
+    const cookieStore = await nextCookies(); 
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -104,6 +106,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
+    // Important: Check if it's a NEXT_REDIRECT error and re-throw it.
+    // Server Actions that redirect using `redirect()` throw this special error.
     if (e.digest?.startsWith('NEXT_REDIRECT')) {
       console.log("loginAction: Caught NEXT_REDIRECT, re-throwing.");
       throw e;
@@ -117,7 +121,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = cookies(); 
+  const cookieStore = await nextCookies(); 
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -125,7 +129,7 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  const cookieStore = cookies(); 
+  const cookieStore = await nextCookies(); 
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -146,12 +150,13 @@ export async function getSession(): Promise<UserSession | null> {
     return null;
   }
 
+  // Read runtime env var for comparison *inside* getSession
+  const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
+  console.log(`getSession: Runtime process.env.ADMIN_USERNAME for env_admin check: '${runtimeEnvAdminUsername}'`);
+
   if (sessionCookieValue.startsWith("env_admin:")) {
     const cookieUsername = sessionCookieValue.split(":")[1];
     console.log(`getSession: Found 'env_admin:' prefixed cookie. Username from cookie: '${cookieUsername}'`);
-
-    const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
-    console.log(`getSession: Runtime process.env.ADMIN_USERNAME for env_admin check: '${runtimeEnvAdminUsername}'`);
 
     if (runtimeEnvAdminUsername && cookieUsername === runtimeEnvAdminUsername) {
         console.log("getSession: env_admin session validated successfully. Granting SuperAdmin (ENV) permissions.");
@@ -233,3 +238,4 @@ export async function getSession(): Promise<UserSession | null> {
     
 
     
+
