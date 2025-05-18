@@ -11,8 +11,6 @@ import type { UserSession, Permission } from "@/lib/types";
 // import bcrypt from 'bcryptjs';
 
 // Module-level check for logging during server startup/build
-// This provides a snapshot of what was available when the module was loaded.
-// It's useful for comparison but the runtime check inside loginAction is more critical.
 const INITIAL_ENV_ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const INITIAL_ENV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -26,9 +24,7 @@ if (!INITIAL_ENV_ADMIN_USERNAME || !INITIAL_ENV_ADMIN_PASSWORD) {
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked.");
-  const cookieStore = cookies();
-
-  // These are the critical runtime values from process.env when the action is executed.
+  
   const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
   const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
@@ -36,18 +32,17 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
+    const cookieStore = cookies();
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
     // --- .ENV ADMIN LOGIN ATTEMPT ---
-    // Check if the server has .env admin credentials configured AT RUNTIME
     if (currentRuntimeAdminUsername && currentRuntimeAdminPassword) {
-      // Server has .env credentials. Now check if submitted username matches.
+      // Server has .env credentials configured at runtime.
       if (username === currentRuntimeAdminUsername) {
         // Submitted username matches the server's .env admin username.
-        // Now check the password.
         if (password === currentRuntimeAdminPassword) {
           // Password also matches. SUCCESS!
           cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
@@ -62,21 +57,21 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         } else {
           // Username matched .env admin, but password was incorrect.
           console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
-          // For an explicit .env admin attempt, do not fall through to database check for this username.
           return { success: false, error: "Invalid password for admin user." };
         }
       }
-      // If username does not match currentRuntimeAdminUsername, it's not an attempt to log in as the .env admin.
+      // If submitted username does not match currentRuntimeAdminUsername, it's not an attempt to log in as the .env admin.
       // So, we fall through to database user check.
+      console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Proceeding to database check.`);
     } else {
       // Server does NOT have .env admin credentials configured at runtime.
       console.warn("loginAction: Server has no ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
       // If the user *tried* to log in with a username that *might* have been intended as the .env admin
       // (e.g., if INITIAL_ENV_ADMIN_USERNAME was set during build and matches submitted username),
       // provide a specific error.
-      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) {
-         console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has no ADMIN_USERNAME/ADMIN_PASSWORD configured at runtime. This is a server configuration issue.`);
-         return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator." };
+      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { // Check if the attempt was for the initial admin username
+         console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue.`);
+         return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
       // Otherwise, it's a normal user login attempt, fall through to database check.
     }
@@ -88,7 +83,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
       // IMPORTANT: Plain text password comparison. In a real app, use bcrypt.compare()
-      const passwordMatch = password === user.passwordHash; // NEVER use this in production
+      // Assuming user.passwordHash IS the plain text password for this project as per previous context
+      const passwordMatch = password === user.passwordHash; 
 
       if (passwordMatch) {
         console.log("loginAction: Database user password MATCH for:", username);
