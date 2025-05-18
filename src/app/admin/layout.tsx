@@ -11,12 +11,16 @@ import { URL } from 'url'; // For robust pathname parsing
 // Helper function to check if user has a specific permission
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
   if (!session || !session.isAuthenticated) {
+    console.log(`hasPermission for '${permission}': Session not authenticated. Returning false.`);
     return false;
   }
   if (session.isEnvAdmin) {
+    console.log(`hasPermission for '${permission}': Session isEnvAdmin is true. Returning true.`);
     return true;
   }
-  return session.permissions?.includes(permission as Permission) || false;
+  const hasPerm = session.permissions?.includes(permission as Permission) || false;
+  console.log(`hasPermission for '${permission}': User has permission: ${hasPerm}. Permissions list: ${session.permissions?.join(', ')}`);
+  return hasPerm;
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -44,33 +48,32 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     } catch (e) {
       console.error("AdminLayout: Error parsing 'next-url' header:", nextUrlHeader, e);
       const basePath = nextUrlHeader.split('?')[0];
-      actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`;
+      actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`; // Ensure it starts with /
       headersAvailable = true; // Still got something from nextUrlHeader
       console.log("AdminLayout: Fallback pathname extraction from next-url:", actualPathname);
     }
-  } else if (invokePathHeader) { // Fallback to invokePathHeader if nextUrlHeader was null but invokePath was '/'
+  } else if (invokePathHeader === '/') { // Special case if invokePathHeader is exactly '/'
      actualPathname = invokePathHeader;
      headersAvailable = true;
-     console.log("AdminLayout: Using 'x-invoke-path' (as fallback, possibly '/') header as actualPathname:", actualPathname);
+     console.log("AdminLayout: Using 'x-invoke-path' (value was '/') header as actualPathname:", actualPathname);
   }
 
+
   if (!headersAvailable) {
-    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Pathname cannot be reliably determined for session logic skip. Assuming it MIGHT be login page to be safe.");
+    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent cookie errors on login page.");
     // If headers are missing, we can't be sure it's NOT the login page.
     // To avoid the "cookies().get() on /admin/login" error, we default to behaving as if it IS the login page.
-    actualPathname = '/admin/login'; // Default to login to PREVENT getSession call
+    actualPathname = '/admin/login'; 
   } else if (actualPathname === '' || actualPathname === null) {
-    actualPathname = '/'; // Default if parsing somehow led to empty or null
-    console.warn("AdminLayout: actualPathname evaluated to empty or null, defaulted to '/'.");
+    actualPathname = '/'; // Default to root if parsing somehow led to empty or null after headers were considered available
+    console.warn("AdminLayout: actualPathname evaluated to empty or null after header checks, defaulted to '/'.");
   }
    console.log("AdminLayout: Final determined pathname for session logic:", actualPathname);
   
   let session: UserSession | null = null;
 
-  // Critical: Only skip getSession if we are certain it's the login page.
-  // OR if headers were missing, we assume it's the login page to be safe.
   if (actualPathname === '/admin/login') {
-    console.log("AdminLayout: Current path IS /admin/login (or headers were unavailable). SKIPPING getSession() call for this layout render pass.");
+    console.log("AdminLayout: Current path IS /admin/login (or headers were unavailable and defaulted to it). SKIPPING getSession() call for this layout render pass.");
   } else {
     console.log(`AdminLayout: Current path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
     try {
@@ -78,6 +81,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       console.log("AdminLayout: Session object received:", session ? JSON.stringify(session, null, 2) : "null");
     } catch (error) {
       console.error("AdminLayout: CRITICAL Error fetching session:", error);
+      // Potentially redirect to login or show an error page if session fetch fails catastrophically
       session = null; 
     }
   }
@@ -150,5 +154,4 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       </footer>
     </div>
   );
-
-    
+}
