@@ -21,8 +21,8 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   const GEMINI_API_KEY_SET = !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_API_KEY;
 
   console.log(`checkRequiredEnvVars: MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars: ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? "SET" : "NOT SET"} (Value: '${process.env.ADMIN_USERNAME}')`);
-  console.log(`checkRequiredEnvVars: ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET" : "NOT SET"} (Is Set: ${!!process.env.ADMIN_PASSWORD})`);
+  console.log(`checkRequiredEnvVars: ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
+  console.log(`checkRequiredEnvVars: ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
   console.log(`checkRequiredEnvVars: GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
   
   if (!MONGODB_URI_SET) {
@@ -31,11 +31,11 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   }
   if (!ADMIN_USERNAME_SET) {
     console.error("CRITICAL: ADMIN_USERNAME is NOT SET in process.env at runtime. .env admin login will fail.");
-     return { success: false, error: "Server admin username not configured. Contact administrator. (Error Code: ENV_ADMIN_USER_MISSING_CHECK)" };
+     return { success: false, error: "Server admin username not configured. Contact administrator. (Error Code: ENV_ADMIN_USER_MISSING_RUNTIME)" };
   }
   if (!ADMIN_PASSWORD_SET) {
     console.error("CRITICAL: ADMIN_PASSWORD is NOT SET in process.env at runtime. .env admin login will fail.");
-    return { success: false, error: "Server admin password not configured. Contact administrator. (Error Code: ENV_ADMIN_PASS_MISSING_CHECK)" };
+    return { success: false, error: "Server admin password not configured. Contact administrator. (Error Code: ENV_ADMIN_PASS_MISSING_RUNTIME)" };
   }
   if (!GEMINI_API_KEY_SET) {
     console.warn("WARNING: GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
@@ -57,7 +57,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
   const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
-  console.log(`loginAction: Initial process.env.ADMIN_USERNAME (at module load): '${INITIAL_ENV_ADMIN_USERNAME}'`);
+  // This log is crucial for Vercel debugging
   console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? `set (length: ${currentRuntimeAdminPassword.length})` : 'NOT SET'}`);
 
@@ -69,41 +69,40 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
-    if (username === INITIAL_ENV_ADMIN_USERNAME && (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword)) {
-        console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has no ADMIN_USERNAME/ADMIN_PASSWORD configured at runtime. This is a critical server configuration issue.`);
-        return { success: false, error: "Server-side admin credentials are not configured properly. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISMATCH)" };
+    // Explicit check if runtime admin creds are missing, THIS IS KEY FOR USER FEEDBACK
+    if (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword) {
+        console.error(`loginAction: CRITICAL - Server-side ADMIN_USERNAME ('${currentRuntimeAdminUsername}') or ADMIN_PASSWORD (is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}) not configured properly at runtime. Cannot perform .env admin login.`);
+        return { success: false, error: "Server admin credentials are not configured properly. Please contact administrator. (Error Code: SERVER_ENV_ADMIN_MISSING_AT_LOGIN)" };
     }
 
     // --- .ENV ADMIN LOGIN ATTEMPT ---
-    if (currentRuntimeAdminUsername && currentRuntimeAdminPassword) {
-      console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with runtime .env admin '${currentRuntimeAdminUsername}'.`);
-      if (username === currentRuntimeAdminUsername) {
-        console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
-        if (password === currentRuntimeAdminPassword) {
-          console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
-          await cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 60 * 60 * 24 * 7, // 1 week
-            path: "/",
-            sameSite: "lax",
-          });
-          console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-          return { success: true, redirectPath: "/admin/dashboard" }; 
-        } else {
-          console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
-        }
+    // This block only runs if currentRuntimeAdminUsername AND currentRuntimeAdminPassword are truthy (checked above)
+    console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with runtime .env admin '${currentRuntimeAdminUsername}'.`);
+    if (username === currentRuntimeAdminUsername) {
+      console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
+      if (password === currentRuntimeAdminPassword) {
+        console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
+        await cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          path: "/",
+          sameSite: "lax",
+        });
+        console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
+        return { success: true, redirectPath: "/admin/dashboard" }; 
       } else {
-         console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Will proceed to DB check if applicable, or fail if only .env admin is used.`);
+        console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
+        // Fall through to DB check or return "Invalid username or password" if no DB check for this user
       }
     } else {
-      console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
+        console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Will proceed to DB check if applicable, or fail if only .env admin is used.`);
     }
     
     // --- DATABASE USER LOGIN ATTEMPT ---
     // Only proceed to DB check if the submitted username is NOT the .env admin username (to prevent conflicts if .env admin login failed for password reason)
-    // OR if there's no .env admin configured at all.
-    if (username !== currentRuntimeAdminUsername || !currentRuntimeAdminUsername) {
+    // OR if there's no .env admin configured at all (though the check above should catch this).
+    if (username !== currentRuntimeAdminUsername) { // We already handled the case where username IS currentRuntimeAdminUsername but password failed.
         console.log("loginAction: Proceeding to database user login check for:", username);
         const user = await getUserByUsername(username);
 
@@ -132,10 +131,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         console.log(`loginAction: Database user '${username}' NOT FOUND.`);
         }
     } else {
-        // This case means .env admin login was attempted for the configured admin username but failed (likely password mismatch)
+        // This case means .env admin login was attempted for the configured admin username but failed (password mismatch)
         console.log("loginAction: Failed .env admin login for the configured admin username. Not proceeding to DB check for this specific username to avoid conflict.");
     }
-
 
     console.log("loginAction: All login attempts FAILED for username:", username);
     return { success: false, error: "Invalid username or password." };
@@ -169,25 +167,22 @@ export async function getSession(): Promise<UserSession | null> {
 
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success) {
-    console.error(`getSession: Environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}. Cannot validate session.`);
+    console.error(`getSession: Environment variable check failed during getSession. Error: ${envCheckResult.error || "Unknown env var issue."}. Cannot validate session robustly.`);
     // Do not delete cookie here, as it might be a temporary server config issue.
     // The checks below will handle invalid sessions based on missing env vars.
   }
-
+  
   const cookieStore = await nextCookies();
   const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
-  if (sessionCookieValue === undefined) {
-    console.log(`getSession: No session cookie found or value is primitive undefined (cookie for ${SESSION_COOKIE_NAME} does not exist or no value).`);
+  if (!sessionCookieValue || sessionCookieValue === 'undefined') {
+    console.log(`getSession: No session cookie found or value is problematic (cookie for ${SESSION_COOKIE_NAME} does not exist, or value is '${sessionCookieValue}').`);
+    if (sessionCookieValue === 'undefined') {
+        console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} had string 'undefined'. This may indicate a prior issue. Ensuring cookie is cleared.`);
+        await cookieStore.delete(SESSION_COOKIE_NAME);
+    }
     return null;
-  } else if (sessionCookieValue === null) {
-    console.log(`getSession: Session cookie ${SESSION_COOKIE_NAME} is null. Treating as no session.`);
-    return null;
-  } else if (sessionCookieValue === 'undefined') { 
-     console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} has the string value 'undefined'. This indicates a potential issue. Clearing cookie and treating as no session.`);
-     await cookieStore.delete(SESSION_COOKIE_NAME);
-     return null;
   }
   console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
@@ -300,3 +295,5 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
+
+    
