@@ -30,14 +30,13 @@ export default function LoginPage() {
       formData.append("password", password);
       
       const result = await loginAction(formData);
-      console.log("LoginPage: loginAction raw result:", result); // Log the raw result
+      console.log("LoginPage: loginAction raw result:", result); 
 
       if (result?.success && result.redirectPath) {
         console.log("LoginPage: Login successful, redirecting to:", result.redirectPath);
         const redirectUrlFromParams = searchParams.get('redirect');
         router.push(redirectUrlFromParams || result.redirectPath);
       } else if (result?.success) {
-        // Fallback if redirectPath is missing for some reason, though it shouldn't be.
         console.warn("LoginPage: Login successful but redirectPath missing, redirecting to /admin/dashboard (fallback). Result:", result);
         router.push("/admin/dashboard");
       } else {
@@ -58,7 +57,7 @@ export default function LoginPage() {
         displayError += ` Details: ${err}`;
       }
       
-      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+      if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
         displayError += " This often indicates a server-side issue or network problem. Please check server logs and your internet connection.";
       }
       setError(displayError);

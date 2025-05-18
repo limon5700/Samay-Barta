@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
   const { toast } = useToast();
 
-  const errorExplanationCard = (
+  const ErrorExplanationCard = () => (
      <Card className="mb-6 border-destructive bg-destructive/10 dark:bg-destructive/20">
         <CardHeader>
             <CardTitle className="text-lg text-destructive-foreground dark:text-destructive-foreground/90">Important: Resolving Dashboard Access Issues</CardTitle>
@@ -65,25 +65,26 @@ export default function DashboardPage() {
               <p className="font-semibold border-b pb-2 mb-2">Specific Error: {pageError}</p>
             )}
             <p>
-                If the dashboard is blank or not loading correctly (you might see a "Server Components render" error in logs or a white screen), please check the following:
+                If the dashboard is blank, not loading correctly, or you're experiencing login loops, please check the following:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Environment Variables:</strong> Ensure <code>MONGODB_URI</code>, <code>GEMINI_API_KEY</code>, <code>ADMIN_USERNAME</code>, and <code>ADMIN_PASSWORD</code> are correctly set in your <code>.env</code> file (for local development) and in your Vercel project settings (for deployed versions). The <code>MONGODB_URI</code> must be complete and not contain placeholders like <code>&lt;username&gt;</code>.</li>
-                <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist includes your local IP and Vercel's IPs. Check if your MongoDB cluster is running and accessible. Incorrect credentials in the URI can also cause connection failures.</li>
-                <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> is valid and has not exceeded its quota.</li>
-                <li><strong>Server Logs:</strong> Check your Vercel deployment logs (or local terminal output if running <code>npm run dev</code>) for more detailed error messages from the server. These logs often contain the specific reason for a "Server Components render" failure.</li>
-                <li><strong>Browser Extensions:</strong> Errors in the browser console related to <code>extensions.aitopia.ai</code> or similar domains are likely caused by browser extensions (like Aitopia) and are not part of this application. They can usually be ignored for diagnosing dashboard loading issues.</li>
+                <li><strong>Environment Variables (Crucial for Vercel):</strong> Ensure <code>MONGODB_URI</code>, <code>GEMINI_API_KEY</code> (if AI features used), <code>ADMIN_USERNAME</code>, and <code>ADMIN_PASSWORD</code> are correctly set in your <strong>Vercel project settings</strong> for the Production environment (and Preview/Development if you use them). This is the most common cause of login failures and dashboard loading issues on Vercel. For local development, ensure they are correct in your <code>.env</code> file. The <code>MONGODB_URI</code> must be complete and not contain placeholders.</li>
+                <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist includes Vercel's IPs and your local IP. Check if your MongoDB cluster is running and accessible. Incorrect credentials in the URI can also cause connection failures.</li>
+                <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> (if used) is valid and has not exceeded its quota.</li>
+                <li><strong>Server Logs:</strong> Check your Vercel deployment logs (Functions logs) or local terminal output (if running <code>npm run dev</code>) for detailed error messages from the server. These logs are vital for diagnosing "Server Components render" failures, login action failures, or data fetching problems.</li>
+                <li><strong>Browser Extensions:</strong> Errors in the browser console related to <code>extensions.aitopia.ai</code> or similar domains are likely caused by browser extensions and are not part of this application. They can usually be ignored for diagnosing dashboard loading issues.</li>
             </ul>
              <p>
-                If issues persist after checking these, the server logs are the most crucial source for diagnosing the underlying problem.
+                If issues persist after checking these, the server logs are the most crucial source for diagnosing the underlying problem. A successful login that redirects back to the login page usually means the server-side `loginAction` failed (check its logs). A blank dashboard often means data fetching for the dashboard page itself failed (check its server logs).
             </p>
         </CardContent>
      </Card>
   );
 
   const fetchDashboardData = useCallback(async () => {
+    console.log("DashboardPage: Attempting to fetch dashboard analytics...");
     setIsAnalyticsLoading(true);
-    setPageError(null);
+    setPageError(null); // Reset error at the start of fetch
     try {
       const [analyticsData, topUsersData] = await Promise.all([
         getDashboardAnalytics(),
@@ -92,46 +93,62 @@ export default function DashboardPage() {
       
       setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
       setTopUsersActivity(topUsersData ?? []);
+      console.log("DashboardPage: Analytics and top users data fetched successfully.");
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : "An unknown error occurred";
-      console.error("Failed to fetch dashboard analytics:", error);
+      console.error("DashboardPage: Failed to fetch dashboard analytics:", error);
       toast({ title: "Error", description: `Failed to fetch dashboard analytics: ${msg}`, variant: "destructive" });
       setAnalytics({ totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
       setTopUsersActivity([]);
-      setPageError(`Analytics fetch failed: ${msg}`);
+      setPageError(`Analytics fetch failed: ${msg}. Check server logs for details.`);
     } finally {
       setIsAnalyticsLoading(false);
     }
   }, [toast]);
 
   const fetchArticles = useCallback(async () => {
+    console.log("DashboardPage: Attempting to fetch articles...");
     setIsLoading(true); // This controls the main article list loading
-    setPageError(null);
+    // pageError is reset by fetchDashboardData or the combined fetch effect
     try {
       const fetchedArticles = await getAllNewsArticles();
       const safeArticles = Array.isArray(fetchedArticles) ? fetchedArticles : [];
       setArticles(safeArticles.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
+      console.log("DashboardPage: Articles fetched successfully.");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "An unknown error occurred";
-      console.error("Failed to fetch articles:", error);
+      console.error("DashboardPage: Failed to fetch articles:", error);
       toast({ title: "Error", description: `Failed to fetch articles: ${msg}`, variant: "destructive" });
       setArticles([]);
-      setPageError(`Articles fetch failed: ${msg}`);
+      setPageError(`Articles fetch failed: ${msg}. Check server logs for details.`);
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    // Initial data fetch
-    Promise.all([fetchDashboardData(), fetchArticles()]).catch(err => {
-        // This catch is for overall promise resolution, individual errors are handled within functions
-        console.error("Error during initial data fetch for dashboard:", err);
-        setPageError("An error occurred during initial page load. Check console and server logs.");
-        setIsLoading(false);
-        setIsAnalyticsLoading(false);
-    });
+    console.log("DashboardPage: useEffect for initial data fetch triggered.");
+    setPageError(null); // Clear any previous page errors
+    Promise.allSettled([fetchDashboardData(), fetchArticles()])
+      .then(results => {
+        results.forEach(result => {
+          if (result.status === 'rejected') {
+            console.error("DashboardPage: Error during one of the initial data fetches:", result.reason);
+            // Page error will be set by individual fetch functions if they fail
+          }
+        });
+      })
+      .catch(err => {
+        console.error("DashboardPage: Unexpected error during initial data fetch Promise.allSettled:", err);
+        setPageError("An unexpected error occurred during initial page load. Check console and server logs.");
+      })
+      .finally(() => {
+        // Ensure loading states are false even if one promise rejects and another resolves
+        // setIsLoading(false); // Handled by fetchArticles
+        // setIsAnalyticsLoading(false); // Handled by fetchDashboardData
+        console.log("DashboardPage: Initial data fetch process completed (settled).");
+      });
   }, [fetchDashboardData, fetchArticles]);
 
 
@@ -235,31 +252,37 @@ export default function DashboardPage() {
        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
        console.error("Error saving article:", error);
        toast({ title: "Error", description: `An error occurred while saving the article: ${errorMessage}`, variant: "destructive" });
-       setPageError(`Saving article failed: ${errorMessage}`);
+       setPageError(`Saving article failed: ${errorMessage}. Check server logs.`);
     } finally {
       setIsSubmitting(false);
     }
   };
   
-
-  if (isLoading || isAnalyticsLoading || pageError) {
+  // This condition now prioritizes showing the error card if pageError is set.
+  if (pageError || isLoading || isAnalyticsLoading) {
     return (
       <div className="container mx-auto py-8">
-        {errorExplanationCard}
+        <ErrorExplanationCard />
         {(isLoading || isAnalyticsLoading) && !pageError && (
           <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="ml-4 text-lg text-muted-foreground">Loading dashboard data...</p>
           </div>
         )}
+         {pageError && !isLoading && !isAnalyticsLoading && (
+           <p className="text-center text-destructive mt-8">
+             Dashboard could not be fully loaded due to the error mentioned above.
+           </p>
+        )}
       </div>
     );
   }
 
-
+  // If we reach here, isLoading and isAnalyticsLoading are false, and pageError is null.
   return (
     <div className="container mx-auto py-8">
-      {errorExplanationCard}
+      {/* Error card is handled by the loading/error state above, but keep for rare cases if needed */}
+      {/* <ErrorExplanationCard /> */}
       
       <Card className="shadow-lg rounded-xl mb-8">
         <CardHeader>
@@ -334,7 +357,7 @@ export default function DashboardPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {articles.length === 0 && !isLoading ? ( // Added !isLoading to prevent showing "No articles" during load
+          {articles.length === 0 && !isLoading ? ( 
             <p className="text-center text-muted-foreground py-10">No articles found. Add one to get started!</p>
           ) : (
             <Table>

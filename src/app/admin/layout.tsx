@@ -2,11 +2,11 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, LogOut, Layout, Users, BarChart3 } from 'lucide-react'; // Removed Settings and ShieldCheck as they were not used
+import { Home, Newspaper, LogOut, Layout, Users, BarChart3 } from 'lucide-react';
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import type { UserSession, Permission } from '@/lib/types';
 import { headers } from 'next/headers';
-import { URL } from 'url'; 
+import { URL } from 'url'; // Node.js URL module for robust parsing
 
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
   if (!session || !session.isAuthenticated) {
@@ -42,6 +42,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       console.log("AdminLayout: Using 'x-invoke-path' header as actualPathname:", actualPathname);
     } else if (nextUrlHeader) {
       try {
+        // Ensure a base URL if nextUrlHeader is just a path (e.g., /admin/login)
         const fullUrl = nextUrlHeader.startsWith('/') ? `http://localhost${nextUrlHeader}` : nextUrlHeader;
         const parsedUrl = new URL(fullUrl);
         actualPathname = parsedUrl.pathname;
@@ -49,24 +50,25 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         console.log("AdminLayout: Using 'next-url' header. Full: '", nextUrlHeader, "', Parsed pathname:", actualPathname);
       } catch (e) {
         console.error("AdminLayout: Error parsing 'next-url' header:", nextUrlHeader, e);
-        // Fallback for potentially malformed next-url
+        // Fallback for potentially malformed next-url, try to extract path part
         const basePath = nextUrlHeader.split('?')[0];
-        actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`;
-        headersAvailable = true;
+        actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`; // Ensure it starts with a slash
+        headersAvailable = true; // Still consider it available as we made an attempt
         console.log("AdminLayout: Fallback pathname extraction from next-url:", actualPathname);
       }
     } else if (invokePathHeader === '/') {
-       actualPathname = invokePathHeader;
+       actualPathname = invokePathHeader; // Handle root path explicitly
        headersAvailable = true;
        console.log("AdminLayout: Using 'x-invoke-path' (value was '/') header as actualPathname:", actualPathname);
     }
 
     if (!headersAvailable) {
       console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent cookie errors on login page.");
-      actualPathname = '/admin/login'; 
+      actualPathname = '/admin/login'; // Safe default if headers are unusable
     } else if (actualPathname === '' || actualPathname === null) {
+      // If after parsing, pathname is empty (e.g. from just "http://localhost"), default to '/'
       actualPathname = '/'; 
-      console.warn("AdminLayout: actualPathname evaluated to empty or null after header checks, defaulted to '/'. This could indicate an issue with header parsing.");
+      console.warn("AdminLayout: actualPathname evaluated to empty or null after header checks, defaulted to '/'. This could indicate an issue with header parsing or an unexpected URL format.");
     }
   } catch (error) {
     console.error("AdminLayout: CRITICAL ERROR reading headers or determining pathname:", error);
@@ -87,7 +89,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       // console.log("AdminLayout: Session object received:", session ? JSON.stringify(session, null, 2) : "null");
     } catch (error) {
       console.error("AdminLayout: CRITICAL Error fetching session:", error);
-      session = null; 
+      session = null; // Ensure session is null on error
     }
   }
   
