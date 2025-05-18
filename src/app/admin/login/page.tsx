@@ -23,42 +23,43 @@ export default function LoginPage() {
     event.preventDefault();
     setError(null);
     setIsLoading(true);
+    console.log("LoginPage: handleSubmit invoked for user:", username);
     try {
       const formData = new FormData();
       formData.append("username", username);
       formData.append("password", password);
       
       const result = await loginAction(formData);
+      console.log("LoginPage: loginAction result:", result);
 
       if (result?.success && result.redirectPath) {
+        console.log("LoginPage: Login successful, redirecting to:", result.redirectPath);
         const redirectUrlFromParams = searchParams.get('redirect');
         router.push(redirectUrlFromParams || result.redirectPath);
       } else if (result?.success) {
+        // Fallback if redirectPath is missing for some reason, though it shouldn't be.
+        console.log("LoginPage: Login successful, redirecting to /admin/dashboard (fallback).");
         router.push("/admin/dashboard");
-      }
-      else {
+      } else {
+        console.error("LoginPage: Login failed. Result error:", result?.error);
         setError(result?.error || "Login failed. Please check your credentials.");
       }
     } catch (err: any) {
-      console.error("Login page handleSubmit caught error object:", err); 
-      console.error("Login page handleSubmit error name:", err.name); // More detail
-      console.error("Login page handleSubmit error message:", err.message); // What you saw
-      console.error("Login page handleSubmit error stack:", err.stack); // Stack trace
-      console.error("Login page handleSubmit error cause:", err.cause); // Potential nested error
+      console.error("LoginPage: handleSubmit caught an unexpected error:", err);
+      console.error("LoginPage: Error name:", err.name);
+      console.error("LoginPage: Error message:", err.message);
+      console.error("LoginPage: Error stack:", err.stack);
+      console.error("LoginPage: Error cause:", err.cause);
 
-      if (err.digest?.startsWith('NEXT_REDIRECT')) {
-        // This should not be hit if loginAction correctly returns objects
-        return;
-      }
       let displayError = "An unexpected error occurred during login. Please try again.";
       if (err.message) {
         displayError += ` Details: ${err.message}`;
       } else if (typeof err === 'string') {
         displayError += ` Details: ${err}`;
       }
-      // For "TypeError: Failed to fetch", also hint at server logs
+      
       if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-        displayError += " This often indicates a server-side issue. Please check server logs.";
+        displayError += " This often indicates a server-side issue or network problem. Please check server logs and your internet connection.";
       }
       setError(displayError);
     } finally {
@@ -106,6 +107,7 @@ export default function LoginPage() {
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -118,9 +120,9 @@ export default function LoginPage() {
           <CardFooter>
             <Button type="submit" className="w-full gap-2" disabled={isLoading}>
               {isLoading ? (
-                <Loader2 className="animate-spin" />
+                <Loader2 className="animate-spin h-5 w-5" />
               ) : (
-                <LogIn />
+                <LogIn className="h-5 w-5" />
               )}
               {isLoading ? "Logging In..." : "Login"}
             </Button>
@@ -130,5 +132,3 @@ export default function LoginPage() {
     </div>
   );
 }
-    
-    
