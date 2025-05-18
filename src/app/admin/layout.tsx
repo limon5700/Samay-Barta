@@ -1,73 +1,66 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers';
+import { headers as nextHeaders } from 'next/headers'; // Corrected import
 import { Button } from '@/components/ui/button';
 import { Home, Newspaper, Layout as LayoutIcon, Users, BarChart3, LogOut } from 'lucide-react';
-import { logoutAction, getSession } from '@/app/admin/auth/actions';
+import { logoutAction } from '@/app/admin/auth/actions'; // getSession is not called here
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   console.log("AdminLayout: Initializing...");
 
-  const headers = await nextHeaders(); // Use await as TypeScript expects it
-  const xInvokePath = headers.get('x-invoke-path');
-  const nextUrlPath = headers.get('next-url');
-
-  console.log(`AdminLayout: Raw x-invoke-path header: '${xInvokePath}'`);
-  console.log(`AdminLayout: Raw next-url header: '${nextUrlPath}'`);
-
   let actualPathname = '';
   let headersAvailable = false;
+  let sessionUsername: string | null = null; // To display in logout button if available
 
-  if (xInvokePath && xInvokePath !== 'null') {
-    actualPathname = xInvokePath;
-    headersAvailable = true;
-  } else if (nextUrlPath && nextUrlPath !== 'null') {
-    try {
-      const url = new URL(nextUrlPath, 'http://localhost'); // Base URL is arbitrary for parsing
-      actualPathname = url.pathname;
+  try {
+    const headersList = await nextHeaders(); // Use await as TypeScript expects it
+    const xInvokePath = headersList.get('x-invoke-path');
+    const nextUrlPath = headersList.get('next-url');
+
+    console.log(`AdminLayout: Raw x-invoke-path header: '${xInvokePath}'`);
+    console.log(`AdminLayout: Raw next-url header: '${nextUrlPath}'`);
+
+    if (xInvokePath && xInvokePath !== 'null') {
+      actualPathname = xInvokePath;
       headersAvailable = true;
-    } catch (e) {
-      console.warn("AdminLayout: Error parsing next-url header:", e);
-      // actualPathname remains empty, headersAvailable remains false
+    } else if (nextUrlPath && nextUrlPath !== 'null') {
+      try {
+        const url = new URL(nextUrlPath, 'http://localhost'); // Base URL is arbitrary for parsing
+        actualPathname = url.pathname;
+        headersAvailable = true;
+      } catch (e) {
+        console.warn("AdminLayout: Error parsing next-url header:", e);
+      }
     }
-  }
 
-  if (!headersAvailable) {
-      console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent issues.");
-      actualPathname = '/admin/login'; // Safe default for path detection logic
+    if (!headersAvailable) {
+        console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent issues.");
+        actualPathname = '/admin/login'; 
+    }
+  } catch (error) {
+      console.error("AdminLayout: Error accessing headers. Defaulting actualPathname to '/admin/login'. Error:", error);
+      actualPathname = '/admin/login';
   }
   
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
 
   const showAdminNav = actualPathname !== '/admin/login';
-  let isAuthenticated = false;
-  let sessionUsername: string | null = null;
-
-  if (showAdminNav) { // Only attempt to get session if not on login page
-    console.log("AdminLayout: Path is NOT /admin/login. Attempting to fetch session.");
-    try {
-        const session = await getSession();
-        if (session?.isAuthenticated) {
-            isAuthenticated = true;
-            sessionUsername = session.username;
-        }
-        console.log("AdminLayout: Session object received:", session);
-    } catch (error) {
-        console.error("AdminLayout: Error fetching session:", error);
-    }
-  } else {
-     console.log("AdminLayout: Current path IS /admin/login. SKIPPING getSession() call for this layout render pass.");
-  }
-
+  
+  // We are not calling getSession() here to determine sessionUsername or isAuthenticated for link display.
+  // The middleware handles route protection. If the user is on an admin page (not login),
+  // they are assumed to be authenticated by the middleware.
+  // For displaying username in logout, we can try a lightweight session check if truly needed,
+  // but for now, we'll keep it simple to avoid reintroducing session check complexity in the layout.
+  // A more advanced approach might involve a client-side fetch for user info if really needed in the header.
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-2">
-        <Link href={isAuthenticated ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity" prefetch={false}>
+        <Link href={showAdminNav ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity" prefetch={false}>
           Samay Barta Lite - Admin
         </Link>
-        {isAuthenticated && showAdminNav && (
+        {showAdminNav && ( // Only show nav links if not on the login page
           <nav className="ml-auto flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" asChild>
               <Link href="/" prefetch={false}>
@@ -107,16 +100,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <form action={logoutAction}>
               <Button variant="destructive" size="sm" type="submit" className="gap-1.5">
                 <LogOut className="h-4 w-4" />
-                Logout ({sessionUsername || 'Admin'})
+                Logout {/* Username display removed for simplicity to avoid getSession call here */}
               </Button>
             </form>
           </nav>
         )}
-         {!isAuthenticated && showAdminNav && ( // User is on an admin page but not authenticated (middleware should catch this)
-            <nav className="ml-auto">
-                 <p className="text-sm text-muted-foreground">Not authenticated.</p>
-            </nav>
-         )}
       </header>
       <main className="flex-1 p-4 sm:px-6 sm:py-0 md:gap-8">{children}</main>
       <footer className="border-t bg-background py-4 text-center text-sm text-muted-foreground mt-auto">

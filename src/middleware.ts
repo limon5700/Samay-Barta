@@ -1,7 +1,6 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-// import { getSession } from '@/app/admin/auth/actions'; // DO NOT call getSession here for Edge compatibility
 import { SESSION_COOKIE_NAME } from '@/lib/auth-constants';
 
 const ADMIN_LOGIN_PATH = '/admin/login';
@@ -28,13 +27,15 @@ export async function middleware(request: NextRequest) {
   // Protect all other routes under /admin
   if (pathname.startsWith(PROTECTED_ADMIN_ROOT)) {
     console.log(`[Middleware] Path ${pathname} is a protected admin route. Checking for session cookie presence...`);
+    // Check for presence and ensure it's not the literal string 'undefined'
     if (!sessionCookieValue || sessionCookieValue === 'undefined') {
       console.log(`[Middleware] Session cookie NOT FOUND or problematic for ${pathname}. Redirecting to login.`);
       const loginUrl = new URL(ADMIN_LOGIN_PATH, request.url);
-      // loginUrl.searchParams.set('redirect_from', pathname); // Optional: add redirect query
       return NextResponse.redirect(loginUrl);
     }
-    console.log(`[Middleware] Session cookie FOUND for ${pathname}. Allowing request to proceed. Full validation will occur on the page/layout.`);
+    // For SuperAdmin mode, presence of *any* valid-looking cookie value is enough for middleware.
+    // getSession on the server component or API route will do the actual validation of "superadmin_env_session" or "user:id".
+    console.log(`[Middleware] Session cookie FOUND for ${pathname}. Allowing request to proceed. Full validation will occur server-side.`);
   }
 
   return NextResponse.next();
@@ -54,8 +55,5 @@ export const config = {
      * - assets/ (public assets folder if you have one)
      */
     '/admin/:path*((?!api|_next/static|_next/image|favicon.ico|manifest.json|robots.txt|images|assets).*)',
-    // Add other paths if needed, but ensure public static assets are excluded.
-    // The above matcher tries to protect /admin/* while excluding common static asset paths.
-    // If you have public files inside /admin/ (e.g. /admin/public_image.png), they might get caught.
   ],
 };
