@@ -28,32 +28,39 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
       
-      // loginAction now returns an object like { success: boolean, error?: string, redirectPath?: string }
       const result = await loginAction(formData);
 
       if (result?.success && result.redirectPath) {
-        // If loginAction signals success and provides a redirectPath, navigate client-side
         const redirectUrlFromParams = searchParams.get('redirect');
         router.push(redirectUrlFromParams || result.redirectPath);
       } else if (result?.success) {
-        // Fallback if redirectPath is somehow not provided but success is true
         router.push("/admin/dashboard");
       }
       else {
         setError(result?.error || "Login failed. Please check your credentials.");
       }
     } catch (err: any) {
-      // Server actions that call redirect() throw an error with digest 'NEXT_REDIRECT'
-      // This catch block is important if loginAction still uses redirect() internally for other cases (e.g., logout)
-      // or if an unexpected error occurs that isn't NEXT_REDIRECT.
-      console.error("Login page handleSubmit error:", err);
+      console.error("Login page handleSubmit caught error object:", err); 
+      console.error("Login page handleSubmit error name:", err.name); // More detail
+      console.error("Login page handleSubmit error message:", err.message); // What you saw
+      console.error("Login page handleSubmit error stack:", err.stack); // Stack trace
+      console.error("Login page handleSubmit error cause:", err.cause); // Potential nested error
+
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
-        // This case should ideally not be hit if loginAction returns success/redirectPath
-        // but kept for robustness if redirect() is called directly.
-        // The framework should handle the redirect.
+        // This should not be hit if loginAction correctly returns objects
         return;
       }
-      setError("An unexpected error occurred during login. Please try again. Details: " + (err.message || 'Unknown error'));
+      let displayError = "An unexpected error occurred during login. Please try again.";
+      if (err.message) {
+        displayError += ` Details: ${err.message}`;
+      } else if (typeof err === 'string') {
+        displayError += ` Details: ${err}`;
+      }
+      // For "TypeError: Failed to fetch", also hint at server logs
+      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+        displayError += " This often indicates a server-side issue. Please check server logs.";
+      }
+      setError(displayError);
     } finally {
       setIsLoading(false);
     }
@@ -123,3 +130,5 @@ export default function LoginPage() {
     </div>
   );
 }
+    
+    
