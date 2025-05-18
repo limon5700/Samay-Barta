@@ -2,12 +2,12 @@
 "use server";
 
 import { cookies as nextCookies } from "next/headers";
-import { redirect } from "next/navigation";
+// import { redirect } from "next/navigation"; // Not used if client-side redirect is preferred
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
 import type { UserSession, Permission } from "@/lib/types";
 
-// Helper to check critical env vars at runtime for login
+// Helper to check critical env vars at runtime specifically for login
 const checkLoginRequiredEnvVars = (): { success: boolean; error?: string } => {
   const MONGODB_URI_SET = !!process.env.MONGODB_URI;
   const ADMIN_USERNAME_SET = !!process.env.ADMIN_USERNAME;
@@ -39,32 +39,28 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   const ADMIN_PASSWORD_SET = !!process.env.ADMIN_PASSWORD;
   const GEMINI_API_KEY_SET = !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_API_KEY;
 
-  // This detailed logging helps diagnose if Vercel or local env is missing something.
-  console.log(`checkRequiredEnvVars: MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars: ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars: ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars: GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
+  console.log(`checkRequiredEnvVars (General): MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
+  console.log(`checkRequiredEnvVars (General): ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
+  console.log(`checkRequiredEnvVars (General): ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
+  console.log(`checkRequiredEnvVars (General): GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
   
-  if (!MONGODB_URI_SET || !ADMIN_USERNAME_SET || !ADMIN_PASSWORD_SET) {
-      // Only return error if truly critical vars for session validation are missing
-      if (!MONGODB_URI_SET) return { success: false, error: "MONGODB_URI is not configured on the server."};
-      if (!ADMIN_USERNAME_SET) return { success: false, error: "ADMIN_USERNAME is not configured on the server."};
-      if (!ADMIN_PASSWORD_SET) return { success: false, error: "ADMIN_PASSWORD is not configured on the server."};
-  }
-  // GEMINI_API_KEY is not critical for login/session, so only warn if missing
+  if (!MONGODB_URI_SET) return { success: false, error: "MONGODB_URI is not configured on the server. (Error Code: GENERAL_DB_MISSING)"};
+  if (!ADMIN_USERNAME_SET) return { success: false, error: "ADMIN_USERNAME is not configured on the server. (Error Code: GENERAL_ADMIN_USER_MISSING)"};
+  if (!ADMIN_PASSWORD_SET) return { success: false, error: "ADMIN_PASSWORD is not configured on the server. (Error Code: GENERAL_ADMIN_PASS_MISSING)"};
+  
   if (!GEMINI_API_KEY_SET) {
-    console.warn("WARNING: GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
+    console.warn("WARNING (General Check): GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
   }
-  return { success: true }; // Assume success if only non-critical (like GEMINI key) are missing
+  return { success: true }; 
 };
 
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked. ABOUT TO CHECK LOGIN ENV VARS.");
-  const envCheckResult = checkLoginRequiredEnvVars(); // Use specific check for login
-  if (!envCheckResult.success) {
-    console.error(`loginAction: Login-critical environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
-    return { success: false, error: envCheckResult.error || "Server configuration error. Please contact administrator." };
+  const loginEnvCheckResult = checkLoginRequiredEnvVars();
+  if (!loginEnvCheckResult.success) {
+    console.error(`loginAction: Login-critical environment variable check failed. Error: ${loginEnvCheckResult.error || "Unknown env var issue."}`);
+    return { success: false, error: loginEnvCheckResult.error || "Server configuration error. Please contact administrator." };
   }
   console.log("loginAction: Login-critical environment variable check PASSED.");
 
@@ -81,6 +77,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   try {
     const cookieStore = await nextCookies();
 
+    // This check is now somewhat redundant due to checkLoginRequiredEnvVars, but kept for safety.
     if (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword) {
         console.error(`loginAction: CRITICAL - Server-side ADMIN_USERNAME ('${currentRuntimeAdminUsername}') or ADMIN_PASSWORD (is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}) not configured properly at runtime. This should have been caught by checkLoginRequiredEnvVars.`);
         return { success: false, error: "Server admin credentials are not configured properly. Please contact administrator. (Error Code: SERVER_ENV_ADMIN_MISSING_AT_LOGIN_INTERNAL)" };
@@ -99,7 +96,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Cookie for env_admin should be set. Admin login via .env credentials SUCCESSFUL for user:", username);
-        return { success: true, redirectPath: "/admin/dashboard" }; 
+        return { success: true, redirectPath: "/admin/dashboard" };
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
         return { success: false, error: "Invalid username or password." };
@@ -111,6 +108,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
         console.log(`loginAction: Database user '${username}' found and is active.`);
+        // IMPORTANT: In a real app, compare hashed passwords. Here, direct comparison for simplicity.
         const passwordMatch = password === user.passwordHash; 
 
         if (passwordMatch) {
@@ -157,6 +155,13 @@ export async function logoutAction() {
   } catch (error) {
     console.error("logoutAction: Error deleting session cookie:", error);
   }
+  // Instead of direct redirect, return a value for client-side handling if preferred,
+  // but direct redirect is fine for logout.
+  // For consistency, let's make it return a value that client can use for redirect.
+  // This also helps if `redirect` itself causes issues in some environments.
+  // However, `redirect` from `next/navigation` is generally the way in Server Actions.
+  // Let's keep direct redirect here for now, it's a common pattern for logout.
+  const { redirect } = await import("next/navigation"); // Dynamic import if issues persist
   redirect("/admin/login");
 }
 
@@ -164,10 +169,12 @@ export async function getSession(): Promise<UserSession | null> {
   'use server';
   console.log("getSession: Invoked. ABOUT TO CHECK ENV VARS in getSession.");
 
-  const envCheckResult = checkRequiredEnvVars();
-  if (!envCheckResult.success && (!process.env.MONGODB_URI || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD)) {
-      console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) might not be configured properly. Error: ${envCheckResult.error || "Essential server config missing."}`);
-      return null; // If critical vars for session validation are missing, cannot proceed.
+  const generalEnvCheckResult = checkRequiredEnvVars();
+  if (!generalEnvCheckResult.success) {
+      console.error(`getSession: General environment variable check failed. Error: ${generalEnvCheckResult.error || "Essential server config missing."}`);
+      // If MONGODB_URI, ADMIN_USERNAME, or ADMIN_PASSWORD are truly missing for a DB user check or env_admin check,
+      // subsequent logic will fail anyway. This initial check helps identify broader config issues.
+      // We don't return null immediately, as some logic might still proceed if only non-critical (e.g. GEMINI_API_KEY) is missing.
   }
 
   let cookieStore;

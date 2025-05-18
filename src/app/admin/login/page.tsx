@@ -44,6 +44,9 @@ export default function LoginPage() {
       } else if (result?.error) {
         console.error("LoginPage: Login failed. Error from loginAction:", result.error);
         setError(result.error);
+      } else if (result === null || result === undefined) {
+        console.error("LoginPage: loginAction returned null or undefined. This indicates a server-side crash before a response could be formulated.");
+        setError("Login failed due to a server communication issue. Please check server logs or try again later.");
       } else {
         console.error("LoginPage: Login attempt was unsuccessful or result was unexpected (e.g., no error but also no success/redirectPath):", result);
         setError("Login failed. Please check your credentials or server logs for more details.");
@@ -53,8 +56,8 @@ export default function LoginPage() {
       console.error("LoginPage: Error name:", err.name);
       console.error("LoginPage: Error message:", err.message);
       console.error("LoginPage: Error stack:", err.stack);
-      console.error("LoginPage: Error cause:", err.cause);
-      console.error("LoginPage: Error digest (if any):", err.digest);
+      console.error("LoginPage: Error cause:", err.cause); // Usually undefined for "Failed to fetch"
+      console.error("LoginPage: Error digest (if any):", err.digest); // For NEXT_REDIRECT or other special errors
       
       let displayError = "An unexpected issue occurred with login. Please try again.";
       if (err.message) {
