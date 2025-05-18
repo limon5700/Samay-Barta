@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies as nextCookies } from "next/headers"; // Aliased import
+import { cookies } from "next/headers"; // Use cookies directly
 // Removed: import type { ReadonlyRequestCookies } from 'next/server'; 
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
@@ -33,7 +33,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
-    const cookieStore = await nextCookies(); 
+    const cookieStore = cookies(); 
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -44,7 +44,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with .env admin '${currentRuntimeAdminUsername}'.`);
       if (username === currentRuntimeAdminUsername) {
         console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
-        // IMPORTANT: Ensure cookieStore is awaited if nextCookies() is treated as async by TS
         if (password === currentRuntimeAdminPassword) {
           console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
           cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
@@ -65,8 +64,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       }
     } else {
       console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
+      // More specific check: if user *tried* to log in as the INITIAL (build-time) admin, but runtime env vars are missing
       if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { 
-         console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue.`);
+         console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue (e.g., missing in Vercel).`);
          return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
     }
@@ -82,7 +82,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
       if (passwordMatch) {
         console.log("loginAction: Database user password MATCH for:", username);
-        // IMPORTANT: Ensure cookieStore is awaited if nextCookies() is treated as async by TS
         cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
@@ -110,13 +109,15 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       throw e;
     }
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
-    return { success: false, error: `An unexpected server error occurred. Please check server logs. Details: ${e.message}` };
+    // Provide a more specific error message if possible, or a generic one if not.
+    const errorMessage = e.message || "An unknown server error occurred.";
+    return { success: false, error: `An unexpected server error occurred during login. Please check server logs. Details: ${errorMessage}` };
   }
 }
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = await nextCookies(); 
+  const cookieStore = cookies(); 
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -124,7 +125,7 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  const cookieStore = await nextCookies(); 
+  const cookieStore = cookies(); 
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
