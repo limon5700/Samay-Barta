@@ -39,33 +39,39 @@ const checkRequiredEnvVars = (): boolean => {
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked.");
   
-  const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
-  const runtimeEnvAdminPassword = process.env.ADMIN_PASSWORD;
+  const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
+  const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
   console.log(`loginAction: Initial process.env.ADMIN_USERNAME (at module load): '${INITIAL_ENV_ADMIN_USERNAME}'`);
-  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${runtimeEnvAdminUsername}'`);
-  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${runtimeEnvAdminPassword ? `SET (length: ${runtimeEnvAdminPassword.length})` : 'NOT SET'}`);
+  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
+  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? `set (length: ${currentRuntimeAdminPassword.length})` : 'NOT SET'}`);
+
 
   if (!process.env.MONGODB_URI) {
-     console.error("loginAction: MONGODB_URI is NOT SET. Login cannot proceed securely.");
-     return { success: false, error: "Server configuration error (DB). Please contact administrator. (Error Code: ENV_MISSING_DB_FOR_LOGIN)" };
+     console.error("loginAction: MONGODB_URI is NOT SET. Login cannot proceed securely (needed for potential DB user lookup).");
+     return { success: false, error: "Server configuration error (DB_CONNECT). Please contact administrator. (Error Code: ENV_MISSING_DB_FOR_LOGIN)" };
+  }
+   if (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword) {
+      console.warn("loginAction: Server has no ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. .env admin login cannot be performed.");
+      // Proceed to DB check if that's intended, or return error if .env admin is the only way
   }
 
+
   try {
-    const cookieStore = nextCookies(); // Synchronous call
+    const cookieStore = await nextCookies();
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
     // --- .ENV ADMIN LOGIN ATTEMPT ---
-    if (runtimeEnvAdminUsername && runtimeEnvAdminPassword) {
-      console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with runtime .env admin '${runtimeEnvAdminUsername}'.`);
-      if (username === runtimeEnvAdminUsername) {
+    if (currentRuntimeAdminUsername && currentRuntimeAdminPassword) {
+      console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with runtime .env admin '${currentRuntimeAdminUsername}'.`);
+      if (username === currentRuntimeAdminUsername) {
         console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
-        if (password === runtimeEnvAdminPassword) {
+        if (password === currentRuntimeAdminPassword) {
           console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
-          cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + runtimeEnvAdminUsername, {
+          cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -73,17 +79,20 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
             sameSite: "lax",
           });
           console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
-          return { success: true, redirectPath: "/admin/dashboard" };
+          // Using redirectPath to signal client-side navigation
+          return { success: true, redirectPath: "/admin/dashboard" }; 
         } else {
           console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
           // Fall through to DB check
         }
       } else {
-         console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${runtimeEnvAdminUsername}'. Will proceed to DB check.`);
+         console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Will proceed to DB check.`);
       }
     } else {
       console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
       if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) {
+         // This case means user tried to login with the username that was loaded initially, but runtime env vars are missing.
+         // Critical server config issue if this path is expected to work (e.g., on Vercel).
          console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue (e.g., missing in Vercel).`);
          return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
@@ -123,13 +132,17 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   } catch (e: any) {
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
     const errorMessage = e.message || "An unknown server error occurred.";
+    // Do not re-throw NEXT_REDIRECT if it's caught, let it propagate if it's from a direct redirect() call that we are not using here
+    if (e.message?.includes('NEXT_REDIRECT')) {
+      throw e;
+    }
     return { success: false, error: `An unexpected server error occurred during login. Please check server logs. Details: ${errorMessage}` };
   }
 }
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = nextCookies(); // Synchronous call
+  const cookieStore = await nextCookies();
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -143,14 +156,11 @@ export async function getSession(): Promise<UserSession | null> {
   const ADMIN_USERNAME_IS_SET = !!process.env.ADMIN_USERNAME;
   const ADMIN_PASSWORD_IS_SET = !!process.env.ADMIN_PASSWORD;
 
-  if (!MONGODB_URI_IS_SET) {
-    console.error("CRITICAL_FOR_SESSION: MONGODB_URI is NOT SET in getSession. Database user sessions cannot be validated.");
-  }
-  if (!ADMIN_USERNAME_IS_SET || !ADMIN_PASSWORD_IS_SET) {
-    console.warn("WARNING_FOR_SESSION: ADMIN_USERNAME or ADMIN_PASSWORD is NOT SET in getSession. .env admin sessions cannot be validated.");
-  }
+  console.log(`getSession: Check - MONGODB_URI_IS_SET: ${MONGODB_URI_IS_SET}`);
+  console.log(`getSession: Check - ADMIN_USERNAME_IS_SET: ${ADMIN_USERNAME_IS_SET}`);
+  console.log(`getSession: Check - ADMIN_PASSWORD_IS_SET: ${ADMIN_PASSWORD_IS_SET}`);
   
-  const cookieStore = nextCookies(); // Synchronous call
+  const cookieStore = await nextCookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -160,7 +170,7 @@ export async function getSession(): Promise<UserSession | null> {
   } else if (sessionCookieValue === null) {
     console.log(`getSession: Session cookie ${SESSION_COOKIE_NAME} is null. Treating as no session.`);
     return null;
-  } else if (sessionCookieValue === 'undefined') { 
+  } else if (sessionCookieValue === 'undefined') { // Handle the string 'undefined'
      console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} has the string value 'undefined'. This indicates a potential issue. Clearing cookie and treating as no session.`);
      cookieStore.delete(SESSION_COOKIE_NAME);
      return null;
