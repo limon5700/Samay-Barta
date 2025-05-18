@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, LogIn, Loader2 } from "lucide-react";
-import { loginAction } from "@/app/admin/auth/actions"; 
+import { Eye, EyeOff, LogIn, Loader2, ShieldCheck } from "lucide-react";
+import { loginAction, checkServerVarsAction } from "@/app/admin/auth/actions"; 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,10 +19,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [serverVars, setServerVars] = useState<Record<string, string | boolean> | null>(null);
+  const [isCheckingVars, setIsCheckingVars] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setServerVars(null); // Clear previous server vars check
     setIsLoading(true);
     console.log("LoginPage: handleSubmit invoked for user:", username);
     try {
@@ -58,11 +62,25 @@ export default function LoginPage() {
       }
       
       if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
-        displayError += " This often indicates a server-side issue or network problem. Please check server logs and your internet connection.";
+        displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
       }
       setError(displayError);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCheckServerVars = async () => {
+    setIsCheckingVars(true);
+    setError(null);
+    try {
+      const vars = await checkServerVarsAction();
+      setServerVars(vars);
+    } catch (e: any) {
+      setError(`Failed to check server variables: ${e.message}`);
+      setServerVars(null);
+    } finally {
+      setIsCheckingVars(false);
     }
   };
 
@@ -113,17 +131,42 @@ export default function LoginPage() {
               </div>
             </div>
             {error && (
-              <p className="text-sm text-destructive text-center bg-destructive/10 p-3 rounded-md">{error}</p>
+              <Alert variant="destructive" className="mt-4">
+                <AlertTitle>Login Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {serverVars && (
+              <Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
+                <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertTitle className="text-blue-700 dark:text-blue-300">Server Configuration Status</AlertTitle>
+                <AlertDescription className="text-blue-600 dark:text-blue-400 text-xs space-y-1">
+                  <p>MONGODB_URI_IS_SET: <strong>{serverVars.MONGODB_URI_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
+                  <p>ADMIN_USERNAME_IS_SET: <strong>{serverVars.ADMIN_USERNAME_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
+                  {serverVars.ADMIN_USERNAME_IS_SET && <p>ADMIN_USERNAME_VALUE: <strong>{String(serverVars.ADMIN_USERNAME_VALUE)}</strong> (Should be 'adminlimon003')</p>}
+                  <p>ADMIN_PASSWORD_IS_SET: <strong>{serverVars.ADMIN_PASSWORD_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
+                  <p>GEMINI_API_KEY_IS_SET: <strong>{serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No - AI features will fail"}</strong></p>
+                  <p>NODE_ENV: <strong>{String(serverVars.NODE_ENV)}</strong></p>
+                  <p>VERCEL_ENV: <strong>{String(serverVars.VERCEL_ENV)}</strong></p>
+                  {(!serverVars.MONGODB_URI_IS_SET || !serverVars.ADMIN_USERNAME_IS_SET || !serverVars.ADMIN_PASSWORD_IS_SET) && (
+                    <p className="font-bold text-destructive mt-2">One or more critical environment variables are NOT SET on the server. Please set them in your Vercel project settings and redeploy.</p>
+                  )}
+                </AlertDescription>
+              </Alert>
             )}
           </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full gap-2" disabled={isLoading}>
+          <CardFooter className="flex flex-col gap-3">
+            <Button type="submit" className="w-full gap-2" disabled={isLoading || isCheckingVars}>
               {isLoading ? (
                 <Loader2 className="animate-spin h-5 w-5" />
               ) : (
                 <LogIn className="h-5 w-5" />
               )}
               {isLoading ? "Logging In..." : "Login"}
+            </Button>
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleCheckServerVars} disabled={isLoading || isCheckingVars}>
+              {isCheckingVars ? <Loader2 className="animate-spin h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+              {isCheckingVars ? "Checking..." : "Check Server Configuration"}
             </Button>
           </CardFooter>
         </form>
