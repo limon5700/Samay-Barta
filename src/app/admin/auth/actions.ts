@@ -1,4 +1,3 @@
-
 "use server";
 
 import { cookies as nextCookies } from "next/headers";
@@ -46,11 +45,13 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
 
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
-  console.log("loginAction: Invoked.");
+  console.log("loginAction: Invoked. ABOUT TO CHECK ENV VARS."); // Added more specific log
   
   // Perform critical environment variable check at the beginning of the action
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success) {
+    // Log the specific error from envCheckResult before returning
+    console.error(`loginAction: Environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
     return { success: false, error: envCheckResult.error || "Server configuration error. Please contact administrator." };
   }
 
@@ -70,10 +71,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     console.log(`loginAction: Attempting login for username: '${username}'`);
 
     // Specific check if user tries to login with the .env admin username but server-side env vars are missing at runtime
-    // This is a more robust check than just relying on INITIAL_ENV_ADMIN_USERNAME which is read at module load time.
     if (username === currentRuntimeAdminUsername && (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword)) {
-        // This case means user typed the correct .env admin username, but the server at runtime doesn't have ADMIN_USERNAME or ADMIN_PASSWORD set in process.env
-        console.error(`loginAction: User attempted to log in as .env admin ('${username}'), but server's runtime process.env.ADMIN_USERNAME or process.env.ADMIN_PASSWORD is not configured. This is a critical server configuration issue (e.g., missing in Vercel).`);
+        console.error(`loginAction: User attempted to log in as .env admin ('${username}'), but server's runtime process.env.ADMIN_USERNAME or process.env.ADMIN_PASSWORD is not configured. This is a critical server configuration issue.`);
         return { success: false, error: "Server-side admin credentials are not configured properly. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISMATCH)" };
     }
 
@@ -96,22 +95,15 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           return { success: true, redirectPath: "/admin/dashboard" }; 
         } else {
           console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
-          // Fall through to DB check or return error if only .env admin is intended
         }
       } else {
          console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Will proceed to DB check if applicable, or fail if only .env admin is used.`);
       }
     } else {
-      // This case means server has no .env admin configured at runtime.
       console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
     }
     
     // --- DATABASE USER LOGIN ATTEMPT ---
-    // Only proceed to DB check if .env admin login didn't succeed or wasn't configured for the submitted username.
-    // This ensures that if an .env admin login attempt fails due to WRONG PASSWORD, we don't accidentally log them in as a DB user with the same username.
-    // However, if the submitted username was NOT the .env admin username, then DB check is fine.
-    
-    // If currentRuntimeAdminUsername is set AND username submitted matched it, but password failed, we should NOT proceed to DB check for that username.
     if (username === currentRuntimeAdminUsername && currentRuntimeAdminUsername) {
         console.log("loginAction: Failed .env admin login for the configured admin username. Not proceeding to DB check for this specific username to avoid conflict.");
         return { success: false, error: "Invalid username or password." };
@@ -122,7 +114,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
-      // In a real app, use bcrypt.compare(password, user.passwordHash);
       const passwordMatch = password === user.passwordHash; 
 
       if (passwordMatch) {
@@ -155,7 +146,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         console.error("loginAction: Database connection error suspected:", e.message);
         return { success: false, error: `Database connection error. Please contact administrator. Details: ${errorMessage} (Error Code: DB_CONN_FAIL)` };
     }
-    // Do not re-throw NEXT_REDIRECT if it's caught, let it propagate if it's from a direct redirect() call that we are not using here
     if (e.message?.includes('NEXT_REDIRECT')) {
       throw e;
     }
@@ -173,13 +163,10 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  console.log("getSession: Invoked.");
-  
-  const envCheckResult = checkRequiredEnvVars(); // Re-check env vars, crucial for getSession
-  // getSession might not strictly need ALL env vars like loginAction (e.g. GEMINI key),
-  // but MONGODB_URI and ADMIN credentials are vital if used.
-  // We won't fail getSession here based on this check, but logs are useful.
+  console.log("getSession: Invoked. ABOUT TO CHECK ENV VARS."); // Added more specific log
 
+  const envCheckResult = checkRequiredEnvVars();
+  // No early return here for getSession, but logs are useful. If MONGODB_URI is missing, DB user validation will fail later.
 
   const cookieStore = await nextCookies();
   const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
@@ -191,7 +178,7 @@ export async function getSession(): Promise<UserSession | null> {
   } else if (sessionCookieValue === null) {
     console.log(`getSession: Session cookie ${SESSION_COOKIE_NAME} is null. Treating as no session.`);
     return null;
-  } else if (sessionCookieValue === 'undefined') { // Handle the string 'undefined'
+  } else if (sessionCookieValue === 'undefined') { 
      console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} has the string value 'undefined'. This indicates a potential issue. Clearing cookie and treating as no session.`);
      cookieStore.delete(SESSION_COOKIE_NAME);
      return null;
@@ -239,7 +226,7 @@ export async function getSession(): Promise<UserSession | null> {
         cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
-    if (!process.env.MONGODB_URI) { // Check MONGODB_URI specifically here
+    if (!process.env.MONGODB_URI) { 
         console.error("getSession: Cannot validate database user session because MONGODB_URI is not set. Clearing cookie.");
         cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
@@ -293,8 +280,6 @@ export async function getSession(): Promise<UserSession | null> {
   return null;
 }
 
-// Helper function to check and log critical environment variables
-// This function is intended for diagnostic purposes.
 export async function checkServerVarsAction(): Promise<Record<string, string | boolean>> {
     console.log("checkServerVarsAction: Invoked from client.");
     const vars = {
