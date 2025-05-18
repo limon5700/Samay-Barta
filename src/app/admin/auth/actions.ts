@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies } from "next/headers"; // Use cookies directly from next/headers
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -36,7 +36,6 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   }
   if (!GEMINI_API_KEY_SET) {
     console.warn("WARNING: GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
-    // Not returning error as it's not critical for login itself
   }
   return { success: true };
 };
@@ -57,9 +56,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? `set (length: ${currentRuntimeAdminPassword.length})` : 'NOT SET'}`);
 
-
   try {
-    const cookieStore = cookies(); // Get the cookie store synchronously
+    const cookieStore = await cookies();
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -86,11 +84,12 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         return { success: true, redirectPath: "/admin/dashboard" }; 
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
+        return { success: false, error: "Invalid username or password." };
       }
-    } else {
-        console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Will proceed to DB check if applicable, or fail if only .env admin is used.`);
     }
     
+    // Fallback to database user check only if the submitted username is NOT the configured .env admin username
+    // This prevents trying to find the .env admin in the DB if their .env login fails.
     if (username !== currentRuntimeAdminUsername) { 
         console.log("loginAction: Proceeding to database user login check for:", username);
         const user = await getUserByUsername(username);
@@ -120,6 +119,8 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         console.log(`loginAction: Database user '${username}' NOT FOUND.`);
         }
     } else {
+        // This block is reached if username === currentRuntimeAdminUsername but password didn't match.
+        // The error for this case was returned above.
         console.log("loginAction: Failed .env admin login for the configured admin username. Not proceeding to DB check for this specific username to avoid conflict.");
     }
 
@@ -144,7 +145,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = cookies(); // Get the cookie store synchronously
+  const cookieStore = await cookies();
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -160,7 +161,7 @@ export async function getSession(): Promise<UserSession | null> {
       return null;
   }
   
-  const cookieStore = cookies(); // Get the cookie store synchronously
+  const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -284,5 +285,3 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
-
-    
