@@ -9,12 +9,15 @@ import type { UserSession, Permission } from '@/lib/types';
 
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
   if (!session || !session.isAuthenticated) {
+    console.log(`hasPermission Check for '${permission}': Session is null or not authenticated. Returning false.`);
     return false;
   }
   if (session.isEnvAdmin) {
+    console.log(`hasPermission Check for '${permission}': Session isEnvAdmin is true. Returning true.`);
     return true;
   }
   const hasPerm = session.permissions?.includes(permission as Permission) || false;
+  console.log(`hasPermission Check for '${permission}': User has permission? ${hasPerm}. Permissions array: [${session.permissions?.join(', ')}]`);
   return hasPerm;
 };
 
@@ -24,7 +27,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
-    const headersList = headers();
+    const headersList = headers(); // This should be called within try-catch
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlHeader = headersList.get('next-url');
 
@@ -38,26 +41,30 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       let base = 'http://localhost'; 
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
-      } else if (typeof window !== 'undefined') { // Should not run in server component, but defensive
-        base = window.location.origin;
       }
-      const fullUrl = new URL(nextUrlHeader, base);
-      actualPathname = fullUrl.pathname;
-      headersAvailable = true;
+      try {
+        const fullUrl = new URL(nextUrlHeader, base);
+        actualPathname = fullUrl.pathname;
+        headersAvailable = true;
+      } catch (urlParseError) {
+        console.error(`AdminLayout: Error parsing next-url header ('${nextUrlHeader}') with base ('${base}'). Error:`, urlParseError);
+        actualPathname = nextUrlHeader; 
+        headersAvailable = true;
+      }
     }
     
     if (!actualPathname && headersAvailable) { 
-        console.warn("AdminLayout: Headers were available but pathname determination resulted in null. Defaulting to '/' temporarily.");
-        actualPathname = '/'; // Fallback if headers are present but path extraction fails
+        console.warn("AdminLayout: Headers were available but pathname determination resulted in null. Defaulting to '/admin/login'.");
+        actualPathname = '/admin/login'; 
     }
 
   } catch (error) {
-    console.error("AdminLayout: Error accessing headers. This might happen during pre-rendering or if headers are not available in this context. Defaulting pathname for safety.", error);
-    actualPathname = '/admin/login'; // Default to login path if headers() call fails
+    console.error("AdminLayout: Error accessing headers. Defaulting pathname to '/admin/login'. Error:", error);
+    actualPathname = '/admin/login'; 
   }
 
   if (!headersAvailable && !actualPathname) { 
-    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent cookie errors on login page.");
+    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login'.");
     actualPathname = '/admin/login'; 
   }
   
@@ -68,7 +75,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     console.log(`AdminLayout: Path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
     try {
       session = await getSession();
-      console.log(`AdminLayout: Session object received for path ${actualPathname}:`, session ? JSON.stringify(session, null, 2).substring(0, 300) + "..." : "null");
+      console.log(`AdminLayout: Session object received for path ${actualPathname}:`, session ? JSON.stringify({ 
+        isAuthenticated: session.isAuthenticated, 
+        username: session.username, 
+        isEnvAdmin: session.isEnvAdmin,
+        roles: session.roles,
+        permissionsCount: session.permissions?.length 
+      }, null, 2) : "null");
     } catch (error) {
       console.error(`AdminLayout: CRITICAL Error fetching session for path ${actualPathname}:`, error);
       session = null; 
@@ -146,3 +159,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </div>
   );
 }
+
+
+    

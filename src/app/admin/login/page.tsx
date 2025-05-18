@@ -24,7 +24,7 @@ export default function LoginPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    setServerVars(null);
+    setServerVars(null); 
     setIsLoading(true);
     console.log("LoginPage: handleSubmit invoked for user:", username);
 
@@ -45,11 +45,11 @@ export default function LoginPage() {
         console.error("LoginPage: Login failed. Error from loginAction:", result.error);
         setError(result.error);
       } else {
-        console.error("LoginPage: Login attempt was unsuccessful or result was unexpected:", result);
+        console.error("LoginPage: Login attempt was unsuccessful or result was unexpected (e.g., no error but also no success/redirectPath):", result);
         setError("Login failed. Please check your credentials or server logs for more details.");
       }
     } catch (err: any) {
-      console.error("LoginPage: handleSubmit caught an error:", err);
+      console.error("LoginPage: handleSubmit caught an error during loginAction call:", err);
       console.error("LoginPage: Error name:", err.name);
       console.error("LoginPage: Error message:", err.message);
       console.error("LoginPage: Error stack:", err.stack);
@@ -61,7 +61,7 @@ export default function LoginPage() {
          displayError = `Login failed: ${err.message}`;
       }
       if (err.message?.toLowerCase().includes('failed to fetch')) {
-        displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables (if deployed) or local .env file, and server logs.";
+        displayError = "Failed to connect to the server for login. This often indicates a server-side crash (e.g., due to missing critical environment variables like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD). Please check your Vercel environment variables (if deployed) or local .env file, and server logs.";
       }
       setError(displayError);
     } finally {
@@ -72,6 +72,7 @@ export default function LoginPage() {
   const handleCheckServerVars = async () => {
     setIsCheckingVars(true);
     setError(null);
+    setServerVars(null);
     try {
       const vars = await checkServerVarsAction();
       setServerVars(vars);
@@ -101,7 +102,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || isCheckingVars}
               />
             </div>
             <div className="space-y-2">
@@ -114,7 +115,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  disabled={isLoading}
+                  disabled={isLoading || isCheckingVars}
                 />
                 <Button
                   type="button"
@@ -123,7 +124,7 @@ export default function LoginPage() {
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  disabled={isLoading}
+                  disabled={isLoading || isCheckingVars}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -144,7 +145,7 @@ export default function LoginPage() {
                   <p>ADMIN_USERNAME_IS_SET: <strong>{serverVars.ADMIN_USERNAME_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
                   {serverVars.ADMIN_USERNAME_IS_SET && <p>ADMIN_USERNAME_VALUE: <strong>{String(serverVars.ADMIN_USERNAME_VALUE)}</strong></p>}
                   <p>ADMIN_PASSWORD_IS_SET: <strong>{serverVars.ADMIN_PASSWORD_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
-                  <p>GEMINI_API_KEY_IS_SET: <strong>{serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No - AI features will fail"}</strong></p>
+                  <p>GEMINI_API_KEY_IS_SET: <strong>{serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No - AI features may fail"}</strong></p>
                   <p>NODE_ENV: <strong>{String(serverVars.NODE_ENV)}</strong></p>
                   <p>VERCEL_ENV: <strong>{String(serverVars.VERCEL_ENV)}</strong></p>
                   {(!serverVars.MONGODB_URI_IS_SET || !serverVars.ADMIN_USERNAME_IS_SET || !serverVars.ADMIN_PASSWORD_IS_SET) && (
@@ -173,4 +174,6 @@ export default function LoginPage() {
     </div>
   );
 }
+    
+
     

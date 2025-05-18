@@ -7,45 +7,66 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
 import type { UserSession, Permission } from "@/lib/types";
 
-// Helper to check critical env vars at runtime
+// Helper to check critical env vars at runtime for login
+const checkLoginRequiredEnvVars = (): { success: boolean; error?: string } => {
+  const MONGODB_URI_SET = !!process.env.MONGODB_URI;
+  const ADMIN_USERNAME_SET = !!process.env.ADMIN_USERNAME;
+  const ADMIN_PASSWORD_SET = !!process.env.ADMIN_PASSWORD;
+
+  console.log(`checkLoginRequiredEnvVars: MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
+  console.log(`checkLoginRequiredEnvVars: ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
+  console.log(`checkLoginRequiredEnvVars: ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
+
+  if (!MONGODB_URI_SET) {
+    console.error("CRITICAL FOR LOGIN: MONGODB_URI is NOT SET in process.env at runtime. Database operations will fail.");
+    return { success: false, error: "Server configuration error (DB_CONNECT_LOGIN_CHECK). Please contact administrator."};
+  }
+  if (!ADMIN_USERNAME_SET) {
+    console.error("CRITICAL FOR LOGIN: ADMIN_USERNAME is NOT SET in process.env at runtime. .env admin login will fail.");
+     return { success: false, error: "Server admin username not configured. Contact administrator. (Error Code: ENV_ADMIN_USER_MISSING_LOGIN)" };
+  }
+  if (!ADMIN_PASSWORD_SET) {
+    console.error("CRITICAL FOR LOGIN: ADMIN_PASSWORD is NOT SET in process.env at runtime. .env admin login will fail.");
+    return { success: false, error: "Server admin password not configured. Contact administrator. (Error Code: ENV_ADMIN_PASS_MISSING_LOGIN)" };
+  }
+  return { success: true };
+};
+
+// Broader check for getSession and other general operations
 const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   const MONGODB_URI_SET = !!process.env.MONGODB_URI;
   const ADMIN_USERNAME_SET = !!process.env.ADMIN_USERNAME;
   const ADMIN_PASSWORD_SET = !!process.env.ADMIN_PASSWORD;
   const GEMINI_API_KEY_SET = !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_API_KEY;
 
+  // This detailed logging helps diagnose if Vercel or local env is missing something.
   console.log(`checkRequiredEnvVars: MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
   console.log(`checkRequiredEnvVars: ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
   console.log(`checkRequiredEnvVars: ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
   console.log(`checkRequiredEnvVars: GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
-
-  if (!MONGODB_URI_SET) {
-    console.error("CRITICAL: MONGODB_URI is NOT SET in process.env at runtime. Database operations will fail.");
-    return { success: false, error: "Server configuration error (DB_CONNECT_RUNTIME_CHECK). Please contact administrator."};
+  
+  if (!MONGODB_URI_SET || !ADMIN_USERNAME_SET || !ADMIN_PASSWORD_SET) {
+      // Only return error if truly critical vars for session validation are missing
+      if (!MONGODB_URI_SET) return { success: false, error: "MONGODB_URI is not configured on the server."};
+      if (!ADMIN_USERNAME_SET) return { success: false, error: "ADMIN_USERNAME is not configured on the server."};
+      if (!ADMIN_PASSWORD_SET) return { success: false, error: "ADMIN_PASSWORD is not configured on the server."};
   }
-  if (!ADMIN_USERNAME_SET) {
-    console.error("CRITICAL: ADMIN_USERNAME is NOT SET in process.env at runtime. .env admin login will fail.");
-     return { success: false, error: "Server admin username not configured. Contact administrator. (Error Code: ENV_ADMIN_USER_MISSING_RUNTIME)" };
-  }
-  if (!ADMIN_PASSWORD_SET) {
-    console.error("CRITICAL: ADMIN_PASSWORD is NOT SET in process.env at runtime. .env admin login will fail.");
-    return { success: false, error: "Server admin password not configured. Contact administrator. (Error Code: ENV_ADMIN_PASS_MISSING_RUNTIME)" };
-  }
+  // GEMINI_API_KEY is not critical for login/session, so only warn if missing
   if (!GEMINI_API_KEY_SET) {
     console.warn("WARNING: GEMINI_API_KEY (or GOOGLE_API_KEY) is NOT SET in process.env at runtime. AI features may fail.");
   }
-  return { success: true };
+  return { success: true }; // Assume success if only non-critical (like GEMINI key) are missing
 };
 
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
-  console.log("loginAction: Invoked. ABOUT TO CHECK ENV VARS.");
-  const envCheckResult = checkRequiredEnvVars();
+  console.log("loginAction: Invoked. ABOUT TO CHECK LOGIN ENV VARS.");
+  const envCheckResult = checkLoginRequiredEnvVars(); // Use specific check for login
   if (!envCheckResult.success) {
-    console.error(`loginAction: Environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
+    console.error(`loginAction: Login-critical environment variable check failed. Error: ${envCheckResult.error || "Unknown env var issue."}`);
     return { success: false, error: envCheckResult.error || "Server configuration error. Please contact administrator." };
   }
-  console.log("loginAction: Environment variable check PASSED.");
+  console.log("loginAction: Login-critical environment variable check PASSED.");
 
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
@@ -61,7 +82,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     const cookieStore = await nextCookies();
 
     if (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword) {
-        console.error(`loginAction: CRITICAL - Server-side ADMIN_USERNAME ('${currentRuntimeAdminUsername}') or ADMIN_PASSWORD (is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}) not configured properly at runtime. This should have been caught by checkRequiredEnvVars, but double-checking.`);
+        console.error(`loginAction: CRITICAL - Server-side ADMIN_USERNAME ('${currentRuntimeAdminUsername}') or ADMIN_PASSWORD (is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}) not configured properly at runtime. This should have been caught by checkLoginRequiredEnvVars.`);
         return { success: false, error: "Server admin credentials are not configured properly. Please contact administrator. (Error Code: SERVER_ENV_ADMIN_MISSING_AT_LOGIN_INTERNAL)" };
     }
 
@@ -146,15 +167,14 @@ export async function getSession(): Promise<UserSession | null> {
   const envCheckResult = checkRequiredEnvVars();
   if (!envCheckResult.success && (!process.env.MONGODB_URI || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD)) {
       console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) might not be configured properly. Error: ${envCheckResult.error || "Essential server config missing."}`);
-      // Don't return null immediately, let the cookie check proceed, as the env var check logs the details.
-      // If the cookie is for env_admin and server vars are missing, it will be handled below.
+      return null; // If critical vars for session validation are missing, cannot proceed.
   }
 
   let cookieStore;
   try {
     cookieStore = await nextCookies();
   } catch (error) {
-    console.error("getSession: Error calling cookies():", error);
+    console.error("getSession: Error calling nextCookies() in getSession:", error);
     return null;
   }
 
@@ -165,7 +185,7 @@ export async function getSession(): Promise<UserSession | null> {
 
   if (!sessionCookieValue || sessionCookieValue === 'undefined') {
     console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME} (cookie does not exist, value is null, or value is primitive undefined: '${sessionCookieValue}').`);
-    const allCookiesDebug = cookieStore.getAll(); 
+    const allCookiesDebug = await cookieStore.getAll(); 
     console.log(`getSession: DEBUG - All cookies present when ${SESSION_COOKIE_NAME} was not found or problematic: ${JSON.stringify(allCookiesDebug.map(c => ({ name: c.name, value: c.value.substring(0,30) + (c.value.length > 30 ? '...' : '')})) )}`);
     if (sessionCookieValue === 'undefined') {
         console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had literal string 'undefined'. This is a serious issue. Ensuring cookie is cleared.`);
@@ -207,7 +227,7 @@ export async function getSession(): Promise<UserSession | null> {
             isAuthenticated: true,
         };
     } else {
-      console.warn(`CRITICAL_SESSION_MISMATCH (env_admin check): Cookie username: '${cookieUsername}', Server's runtime ADMIN_USERNAME: '${runtimeEnvAdminUsername}'. Clearing cookie.`);
+      console.warn(`CRITICAL_SESSION_MISMATCH (env_admin check): Cookie username ('${cookieUsername}') does not match server's runtime ADMIN_USERNAME ('${runtimeEnvAdminUsername}'). This could happen if ADMIN_USERNAME was changed after cookie was set. Clearing cookie.`);
       await cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
@@ -290,4 +310,6 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
+    
+
     
