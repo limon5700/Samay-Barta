@@ -19,6 +19,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // SWC is the default compiler for Next.js. Turbopack can be enabled by
+  // setting `compiler: { turbopack: true }` or by using the `--turbo` flag.
+  // If facing SWC build errors, ensure your node_modules and .next folders are clean.
   // compiler: {
   //   // Turbopack can be enabled by removing this or setting it to 'turbopack'
   //   // For SWC:
