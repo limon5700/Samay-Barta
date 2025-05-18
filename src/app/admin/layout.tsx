@@ -1,7 +1,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers'; // Aliased import
+import { headers as nextHeaders } from 'next/headers'; 
 import { Button } from '@/components/ui/button';
 import { Home, Newspaper, LogOut, Layout, Users, BarChart3 } from 'lucide-react';
 import { logoutAction } from '@/app/admin/auth/actions';
@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
-    const headersList = await nextHeaders(); // Ensured await is used
+    const headersList = await nextHeaders(); 
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlHeader = headersList.get('next-url');
 
@@ -23,12 +23,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath;
       headersAvailable = true;
     } else if (nextUrlHeader) {
-      let base = 'http://localhost'; // Default base
-      // Try to get base from env var if available (for more robust URL parsing)
+      let base = 'http://localhost'; 
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
-      } else if (typeof window !== 'undefined') { // Fallback for client-side, though less relevant for server component
-        base = window.location.origin;
       }
       
       try {
@@ -37,33 +34,28 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         headersAvailable = true;
       } catch (urlParseError) {
         console.error(`AdminLayout: Error parsing next-url header ('${nextUrlHeader}') with base ('${base}'). Error:`, urlParseError);
-        // If parsing fails, keep actualPathname as null to hit the fallback logic
         actualPathname = null; 
-        headersAvailable = true; // Headers were technically available, but parsing failed
+        headersAvailable = true; 
       }
     }
     
-    // If headers were available but path determination still resulted in null/empty
     if (headersAvailable && !actualPathname) { 
         console.warn("AdminLayout: Headers were available but pathname determination resulted in null/empty. Defaulting to '/admin/dashboard' for nav logic.");
-        actualPathname = '/admin/dashboard'; // Default to a non-login admin path
+        actualPathname = '/admin/dashboard'; 
     }
 
   } catch (error) {
     console.error("AdminLayout: Error accessing or processing headers. Defaulting to '/admin/dashboard' for nav logic to ensure nav shows. Error:", error);
-    actualPathname = '/admin/dashboard'; // Default to a non-login admin path
+    actualPathname = '/admin/dashboard'; 
   }
 
-  // If headers were completely unavailable, default to a non-login admin path
   if (!headersAvailable) { 
-    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' for nav logic to ensure nav shows.");
-    actualPathname = '/admin/dashboard'; 
+    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent issues when trying to show nav for login page.");
+    actualPathname = '/admin/login'; // Default specifically to login if headers are entirely missing
   }
   
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
 
-  // Show admin nav if the determined path is NOT the login page.
-  // If actualPathname is null (e.g., due to parsing error but headersAvailable was true), it won't match '/admin/login', so nav will show.
   const showAdminNav = actualPathname !== '/admin/login';
 
   return (

@@ -39,10 +39,11 @@ const checkRequiredEnvVars = (): { success: boolean; error?: string } => {
   const ADMIN_PASSWORD_SET = !!process.env.ADMIN_PASSWORD;
   const GEMINI_API_KEY_SET = !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_API_KEY;
 
-  console.log(`checkRequiredEnvVars (General): MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars (General): ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars (General): ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
-  console.log(`checkRequiredEnvVars (General): GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
+  // This console.log block is for getSession, not for loginAction's initial check
+  // console.log(`checkRequiredEnvVars (General): MONGODB_URI is ${MONGODB_URI_SET ? "SET" : "NOT SET"}`);
+  // console.log(`checkRequiredEnvVars (General): ADMIN_USERNAME is ${ADMIN_USERNAME_SET ? `SET (Value: '${process.env.ADMIN_USERNAME}')` : "NOT SET"}`);
+  // console.log(`checkRequiredEnvVars (General): ADMIN_PASSWORD is ${ADMIN_PASSWORD_SET ? "SET (Is Set: true)" : "NOT SET"}`);
+  // console.log(`checkRequiredEnvVars (General): GEMINI_API_KEY/GOOGLE_API_KEY is ${GEMINI_API_KEY_SET ? "SET" : "NOT SET"}`);
   
   if (!MONGODB_URI_SET) return { success: false, error: "MONGODB_URI is not configured on the server. (Error Code: GENERAL_DB_MISSING)"};
   if (!ADMIN_USERNAME_SET) return { success: false, error: "ADMIN_USERNAME is not configured on the server. (Error Code: GENERAL_ADMIN_USER_MISSING)"};
@@ -95,7 +96,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           sameSite: "lax",
         });
         console.log("loginAction: Cookie for env_admin should be set. Admin login via .env credentials SUCCESSFUL for user:", username);
-        redirect("/admin/dashboard"); 
+        return { success: true, redirectPath: "/admin/dashboard" };
       } else {
         console.warn("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
         return { success: false, error: "Invalid username or password." };
@@ -107,7 +108,9 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
         console.log(`loginAction: Database user '${username}' found and is active.`);
-        const passwordMatch = password === user.passwordHash; 
+        // IMPORTANT: In a real app, use a secure password hashing and comparison library like bcrypt.
+        // const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+        const passwordMatch = password === user.passwordHash; // Insecure direct comparison for simplicity here
 
         if (passwordMatch) {
             console.log(`loginAction: Database user password MATCH for: ${username}. About to set cookie for user_id: ${user.id}`);
@@ -119,7 +122,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
                 sameSite: "lax",
             });
             console.log("loginAction: Database user session cookie should be set for user_id:", user.id);
-            redirect("/admin/dashboard");
+            return { success: true, redirectPath: "/admin/dashboard" };
         } else {
             console.log("loginAction: Database user password MISMATCH for:", username);
         }
@@ -134,10 +137,6 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
   } catch (e: any) {
     console.error("loginAction: ERROR during loginAction execution:", e.message, e.stack);
-    if (e.digest?.startsWith('NEXT_REDIRECT')) {
-      console.log("loginAction: Caught NEXT_REDIRECT, re-throwing to allow Next.js to handle navigation.");
-      throw e;
-    }
     let errorMessage = e.message || "An unknown server error occurred during login.";
     if (e.name === 'MongoNetworkError' || e.message?.includes('connect ECONNREFUSED') || e.message?.includes('querySrv')) {
         console.error("loginAction: Database connection error suspected:", e.message);
@@ -167,6 +166,9 @@ export async function getSession(): Promise<UserSession | null> {
   const generalEnvCheckResult = checkRequiredEnvVars();
   if (!generalEnvCheckResult.success) {
       console.error(`getSession: General environment variable check failed. Error: ${generalEnvCheckResult.error || "Essential server config missing."}`);
+      // Do not delete cookie here; let middleware handle redirect if auth fails due to this.
+      // Deleting cookie here might hide the root cause if env vars are missing.
+      return null;
   }
 
   let cookieStore;
@@ -182,15 +184,15 @@ export async function getSession(): Promise<UserSession | null> {
 
   console.log(`getSession: Value of sessionCookie?.value upon read: '${sessionCookieValue}' (Type: ${typeof sessionCookieValue})`);
 
-  if (!sessionCookie || !sessionCookieValue || sessionCookieValue === 'undefined') {
+  if (!sessionCookieValue || sessionCookieValue === 'undefined') {
     let reason = "cookie does not exist";
-    if (sessionCookie && !sessionCookieValue) reason = "cookie exists but value is null/empty";
+    if (sessionCookie && !sessionCookieValue && typeof sessionCookieValue !== 'string') reason = "cookie exists but value is null/empty/primitive undefined";
     if (sessionCookieValue === 'undefined') reason = "cookie value is the literal string 'undefined'";
     
-    console.warn(`getSession: No session cookie found for ${SESSION_COOKIE_NAME}. Reason: ${reason}. Cookie value: '${sessionCookieValue}'`);
+    console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME} (Reason: ${reason}, Value: '${sessionCookieValue}').`);
     
     const allCookiesDebug = await cookieStore.getAll(); 
-    console.log(`getSession: DEBUG - All cookies received by server when ${SESSION_COOKIE_NAME} was problematic: ${JSON.stringify(allCookiesDebug.map(c => ({ name: c.name, value: c.value.substring(0,30) + (c.value.length > 30 ? '...' : '')})) )}`);
+    console.log(`getSession: DEBUG - All cookies present when ${SESSION_COOKIE_NAME} was problematic: ${JSON.stringify(allCookiesDebug.map(c => ({ name: c.name, value: c.value.substring(0,30) + (c.value.length > 30 ? '...' : '')})) )}`);
     
     if (sessionCookieValue === 'undefined') {
         console.error(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had literal string 'undefined'. This is a serious issue. Ensuring cookie is cleared.`);

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent, useEffect } from "react";
@@ -32,32 +33,25 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
 
-      // loginAction will now handle the redirect itself or throw an error.
-      // If it returns, it's an error or an unexpected state.
       const result = await loginAction(formData); 
-      
-      // This part should ideally not be reached if loginAction uses redirect()
-      // successfully, as redirect() throws NEXT_REDIRECT.
-      // If result is returned, it means redirect() didn't throw or login failed.
-      if (result?.error) {
-        console.error("LoginPage: Login failed. Error from loginAction:", result.error);
-        setError(result.error);
-      } else if (result?.success && !result?.redirectPath) {
-        // This case should not happen if loginAction uses redirect() for success.
-        // It's here for robustness if loginAction pattern changes to return redirectPath.
-        console.warn("LoginPage: loginAction returned success but no redirectPath. This is unexpected when server-side redirect is used.");
-        setError("Login succeeded but redirection failed. Please contact support.");
-      } else if (result?.success && result?.redirectPath) {
-        // This path is for when loginAction returns redirectPath for client-side routing
+      console.log("LoginPage: loginAction raw result:", result);
+
+      if (result?.success && result?.redirectPath) {
         console.log("LoginPage: loginAction returned success, attempting client-side redirect to:", result.redirectPath);
         router.push(result.redirectPath);
         // setIsLoading will be reset by component unmount or if error occurs before push
-        return;
+        return; 
+      } else if (result?.error) {
+        console.error("LoginPage: Login failed. Error from loginAction:", result.error);
+        setError(result.error);
+      } else if (result?.success && !result?.redirectPath) {
+        console.warn("LoginPage: loginAction returned success but no redirectPath. This is unexpected when server-side redirect is used.");
+        setError("Login succeeded but redirection failed. Please contact support.");
       } else if (!result) {
-        console.error("LoginPage: loginAction returned null or undefined. This indicates a server-side issue before a response could be formulated.");
-        setError("Login failed due to a server communication issue. Please check server logs or try again later.");
+         console.error("LoginPage: loginAction returned null or undefined. This indicates a server-side issue before a response could be formulated (e.g. server crash).");
+         setError("Login failed due to a server communication issue. Please check server logs or try again later.");
       } else {
-         console.warn("LoginPage: loginAction returned an unexpected response:", result);
+         console.warn("LoginPage: loginAction returned an unexpected response format:", result);
          setError("Login failed. Unexpected response from server.");
       }
 
@@ -66,15 +60,14 @@ export default function LoginPage() {
       console.error("LoginPage: Error name:", err.name);
       console.error("LoginPage: Error message:", err.message);
       console.error("LoginPage: Error stack:", err.stack);
-      console.error("LoginPage: Error cause:", err.cause);
+      console.error("LoginPage: Error cause:", err.cause); // Often undefined, but good to check
       console.error("LoginPage: Error digest (if any):", err.digest);
       
+      // Next.js redirect() throws an error with a specific digest
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
-        console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
-        // For NEXT_REDIRECT, we don't set error and don't stop loading,
-        // as the page will unmount. If it doesn't, then there's an issue.
-        // Setting isLoading to false here might cause a flicker if redirect is slow.
-        // Let's allow it to remain true, as the component will unmount.
+        console.log("LoginPage: NEXT_REDIRECT signal caught by handleSubmit's catch block. This means redirect() was called in loginAction. Navigation should be handled by Next.js.");
+        // For NEXT_REDIRECT, we don't set error. isLoading might be set to false in finally, or let it stay true as page unmounts.
+        // If redirect() was *not* intended, this is a problem.
         return; 
       }
       
@@ -82,14 +75,15 @@ export default function LoginPage() {
       if (err.message) {
          displayError = `Login failed: ${err.message}`;
       }
+      // This "Failed to fetch" often means the server action crashed hard
       if (err.message?.toLowerCase().includes('failed to fetch')) {
-        displayError = "Failed to connect to the server for login. This often indicates a server-side crash (e.g., due to missing critical environment variables like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD). Please check your Vercel environment variables (if deployed) or local .env file, and server logs.";
+        displayError = "Failed to connect to the server for login. This can indicate a server-side crash (e.g., due to missing critical environment variables like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD). Please check your Vercel environment variables (if deployed) or local .env file, and server logs.";
       }
       setError(displayError);
     } finally {
-      // Only set isLoading to false if it's not a NEXT_REDIRECT error,
+       // Only set isLoading to false if it's not a NEXT_REDIRECT error that was re-thrown,
       // as NEXT_REDIRECT should cause the component to unmount.
-      // However, to be safe and prevent stuck loaders if redirect somehow fails client-side:
+      // However, to be safe and prevent stuck loaders if redirect somehow fails client-side after being caught:
       if (!(typeof (event as any)?.digest === 'string' && (event as any).digest.startsWith('NEXT_REDIRECT'))) {
          setIsLoading(false);
       }
