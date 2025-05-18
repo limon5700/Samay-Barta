@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies as nextCookiesAliased } from "next/headers"; // Using alias to satisfy TS if needed
+import { cookies } from "next/headers"; // Use cookies directly from next/headers
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -59,7 +59,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 
   try {
-    const cookieStore = await nextCookiesAliased();
+    const cookieStore = cookies(); // Get the cookie store synchronously
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -75,7 +75,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
       console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
       if (password === currentRuntimeAdminPassword) {
         console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
-        await cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
+        cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -97,11 +97,12 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
         if (user && user.isActive) {
         console.log(`loginAction: Database user '${username}' found and is active.`);
-        const passwordMatch = password === user.passwordHash; 
+        // In a real app, use bcrypt.compare(password, user.passwordHash)
+        const passwordMatch = password === user.passwordHash; // INSECURE: plain text comparison
 
         if (passwordMatch) {
             console.log("loginAction: Database user password MATCH for:", username);
-            await cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
+            cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             maxAge: 60 * 60 * 24 * 7, 
@@ -132,15 +133,20 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
         console.error("loginAction: Database connection error suspected:", e.message);
         return { success: false, error: `Database connection error. Please contact administrator. Details: ${errorMessage} (Error Code: DB_CONN_FAIL)` };
     }
+    // Check if the error is a NEXT_REDIRECT error, which is expected if redirect() is called
+    if (e.digest?.startsWith('NEXT_REDIRECT')) {
+        console.log("loginAction: Caught NEXT_REDIRECT, re-throwing.");
+        throw e; // Re-throw NEXT_REDIRECT errors to let Next.js handle them
+    }
     return { success: false, error: `An unexpected server error occurred during login. Please check server logs. Details: ${errorMessage}` };
   }
 }
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = await nextCookiesAliased();
+  const cookieStore = cookies(); // Get the cookie store synchronously
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
-  await cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
 }
 
@@ -148,26 +154,21 @@ export async function getSession(): Promise<UserSession | null> {
   'use server';
   console.log("getSession: Invoked. ABOUT TO CHECK ENV VARS in getSession.");
 
-  const envCheckResult = checkRequiredEnvVars(); // This will log env var status
+  const envCheckResult = checkRequiredEnvVars(); 
   if (!envCheckResult.success && !process.env.MONGODB_URI && !process.env.ADMIN_USERNAME && !process.env.ADMIN_PASSWORD) {
-      // If critical vars for ANY type of session validation are missing, bail early.
-      // This check might be too aggressive if only some are missing but others would allow a certain type of session.
-      // However, it provides a clear log if fundamental configuration is absent.
       console.error(`getSession: Critical environment variables (MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are not configured. Cannot validate session. Error: ${envCheckResult.error || "Essential server config missing."}`);
-      // Do NOT delete cookie here, as it might be a temporary server config issue.
-      // Let subsequent checks handle it.
       return null;
   }
   
-  const cookieStore = await nextCookiesAliased();
-  const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
+  const cookieStore = cookies(); // Get the cookie store synchronously
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
   if (!sessionCookieValue || sessionCookieValue === 'undefined') {
     console.log(`getSession: No session cookie found or value is problematic (cookie for ${SESSION_COOKIE_NAME} does not exist, or value is '${sessionCookieValue}').`);
     if (sessionCookieValue === 'undefined') {
         console.warn(`getSession: Session cookie ${SESSION_COOKIE_NAME} had string 'undefined'. This may indicate a prior issue. Ensuring cookie is cleared.`);
-        await cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
     }
     return null;
   }
@@ -182,7 +183,7 @@ export async function getSession(): Promise<UserSession | null> {
 
     if (!runtimeEnvAdminUsername || !process.env.ADMIN_PASSWORD) {
         console.warn(`getSession: env_admin cookie ('${cookieUsername}') present, but server-side ADMIN_USERNAME or ADMIN_PASSWORD is NOT SET at runtime. Cannot validate. Clearing cookie.`);
-        await cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -201,7 +202,7 @@ export async function getSession(): Promise<UserSession | null> {
         };
     } else {
       console.warn(`getSession: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. This could be due to process.env.ADMIN_USERNAME not being available/mismatching at this execution, or a stale cookie. Clearing cookie.`);
-      await cookieStore.delete(SESSION_COOKIE_NAME);
+      cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
   }
@@ -211,12 +212,12 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
-        await cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
     if (!process.env.MONGODB_URI) { 
         console.error("getSession: Cannot validate database user session because MONGODB_URI is not set. Clearing cookie.");
-        await cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -253,18 +254,18 @@ export async function getSession(): Promise<UserSession | null> {
 
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
-      await cookieStore.delete(SESSION_COOKIE_NAME);
+      cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
 
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        await cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
   }
 
   console.warn(`getSession: Cookie format invalid or unhandled for value: '${sessionCookieValue}'. This may indicate a stale or malformed cookie. Clearing cookie.`);
-  await cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
 
@@ -283,3 +284,5 @@ export async function checkServerVarsAction(): Promise<Record<string, string | b
     console.log("checkServerVarsAction: Current server environment variables status:", vars);
     return vars;
 }
+
+    
