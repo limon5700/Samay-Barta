@@ -1,7 +1,7 @@
 
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies as nextCookies } from "next/headers"; // Aliased import
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -32,7 +32,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
-    const cookieStore = cookies();
+    const cookieStore = nextCookies(); // Using aliased import
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -40,11 +40,11 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     // --- .ENV ADMIN LOGIN ATTEMPT ---
     if (currentRuntimeAdminUsername && currentRuntimeAdminPassword) {
-      // Server has .env credentials configured at runtime.
+      console.log(`loginAction: Server has .env credentials. Comparing submitted username '${username}' with .env admin '${currentRuntimeAdminUsername}'.`);
       if (username === currentRuntimeAdminUsername) {
-        // Submitted username matches the server's .env admin username.
+        console.log(`loginAction: .env admin username MATCHED. Comparing password.`);
         if (password === currentRuntimeAdminPassword) {
-          // Password also matches. SUCCESS!
+          console.log("loginAction: .env admin password MATCHED. Setting cookie for env_admin:", username);
           cookieStore.set(SESSION_COOKIE_NAME, "env_admin:" + currentRuntimeAdminUsername, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -55,25 +55,18 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           console.log("loginAction: Admin login via .env credentials SUCCESSFUL for user:", username);
           return { success: true, redirectPath: "/admin/dashboard" };
         } else {
-          // Username matched .env admin, but password was incorrect.
           console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
           return { success: false, error: "Invalid password for admin user." };
         }
+      } else {
+         console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Proceeding to database check.`);
       }
-      // If submitted username does not match currentRuntimeAdminUsername, it's not an attempt to log in as the .env admin.
-      // So, we fall through to database user check.
-      console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Proceeding to database check.`);
     } else {
-      // Server does NOT have .env admin credentials configured at runtime.
-      console.warn("loginAction: Server has no ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
-      // If the user *tried* to log in with a username that *might* have been intended as the .env admin
-      // (e.g., if INITIAL_ENV_ADMIN_USERNAME was set during build and matches submitted username),
-      // provide a specific error.
-      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { // Check if the attempt was for the initial admin username
+      console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
+      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { 
          console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue.`);
          return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
-      // Otherwise, it's a normal user login attempt, fall through to database check.
     }
 
     // --- DATABASE USER LOGIN ATTEMPT ---
@@ -82,13 +75,11 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
-      // IMPORTANT: Plain text password comparison. In a real app, use bcrypt.compare()
-      // Assuming user.passwordHash IS the plain text password for this project as per previous context
       const passwordMatch = password === user.passwordHash; 
 
       if (passwordMatch) {
         console.log("loginAction: Database user password MATCH for:", username);
-        cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
+        cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, { // Using aliased import
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -117,7 +108,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = cookies();
+  const cookieStore = nextCookies(); // Using aliased import
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -125,7 +116,7 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  const cookieStore = cookies();
+  const cookieStore = nextCookies(); // Using aliased import
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -139,7 +130,7 @@ export async function getSession(): Promise<UserSession | null> {
 
 
   if (!sessionCookieValue || sessionCookieValue === 'undefined') {
-    console.log("getSession: No session cookie found or value is 'undefined'.");
+    console.log(`getSession: No session cookie found or value is 'undefined'.`);
     if (sessionCookieValue === 'undefined') {
         console.warn("getSession: Cookie value was literally 'undefined'. This might indicate an issue with cookie setting/retrieval or prior deletion.");
     }
@@ -168,7 +159,7 @@ export async function getSession(): Promise<UserSession | null> {
         };
     } else {
       console.warn(`getSession: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. This could be due to process.env.ADMIN_USERNAME not being available/mismatching at this execution. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME);
+      cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
       return null;
     }
   }
@@ -178,7 +169,7 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
         return null;
     }
 
@@ -215,18 +206,18 @@ export async function getSession(): Promise<UserSession | null> {
 
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME);
+      cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
       return null;
 
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME);
+        cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
         return null;
     }
   }
 
   console.warn(`getSession: Cookie format invalid or unhandled. Cookie value: '${sessionCookieValue}'. Clearing cookie.`);
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
   return null;
 }
 
