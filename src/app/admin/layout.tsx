@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Home, Newspaper, LogOut, Layout, Users, BarChart3 } from 'lucide-react';
 import { logoutAction, getSession } from '@/app/admin/auth/actions';
 import type { UserSession, Permission } from '@/lib/types';
-import { headers } from 'next/headers';
-import { URL } from 'url'; // Node.js URL module for robust parsing
+// Removed headers import as we will not use it directly for path detection here.
 
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
   if (!session || !session.isAuthenticated) {
@@ -23,74 +22,19 @@ const hasPermission = (session: UserSession | null, permission: string): boolean
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const headerList = headers();
-  let actualPathname: string | null = null;
-  let headersAvailable = false;
-
   console.log("AdminLayout: Initializing...");
 
-  try {
-    const invokePathHeader = headerList.get('x-invoke-path');
-    const nextUrlHeader = headerList.get('next-url');
-    
-    console.log(`AdminLayout: Raw x-invoke-path header: '${invokePathHeader}'`);
-    console.log(`AdminLayout: Raw next-url header: '${nextUrlHeader}'`);
-
-    if (invokePathHeader && invokePathHeader !== '/') {
-      actualPathname = invokePathHeader;
-      headersAvailable = true;
-      console.log("AdminLayout: Using 'x-invoke-path' header as actualPathname:", actualPathname);
-    } else if (nextUrlHeader) {
-      try {
-        // Ensure a base URL if nextUrlHeader is just a path (e.g., /admin/login)
-        const fullUrl = nextUrlHeader.startsWith('/') ? `http://localhost${nextUrlHeader}` : nextUrlHeader;
-        const parsedUrl = new URL(fullUrl);
-        actualPathname = parsedUrl.pathname;
-        headersAvailable = true;
-        console.log("AdminLayout: Using 'next-url' header. Full: '", nextUrlHeader, "', Parsed pathname:", actualPathname);
-      } catch (e) {
-        console.error("AdminLayout: Error parsing 'next-url' header:", nextUrlHeader, e);
-        // Fallback for potentially malformed next-url, try to extract path part
-        const basePath = nextUrlHeader.split('?')[0];
-        actualPathname = basePath.startsWith('/') ? basePath : `/${basePath}`; // Ensure it starts with a slash
-        headersAvailable = true; // Still consider it available as we made an attempt
-        console.log("AdminLayout: Fallback pathname extraction from next-url:", actualPathname);
-      }
-    } else if (invokePathHeader === '/') {
-       actualPathname = invokePathHeader; // Handle root path explicitly
-       headersAvailable = true;
-       console.log("AdminLayout: Using 'x-invoke-path' (value was '/') header as actualPathname:", actualPathname);
-    }
-
-    if (!headersAvailable) {
-      console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent cookie errors on login page.");
-      actualPathname = '/admin/login'; // Safe default if headers are unusable
-    } else if (actualPathname === '' || actualPathname === null) {
-      // If after parsing, pathname is empty (e.g. from just "http://localhost"), default to '/'
-      actualPathname = '/'; 
-      console.warn("AdminLayout: actualPathname evaluated to empty or null after header checks, defaulted to '/'. This could indicate an issue with header parsing or an unexpected URL format.");
-    }
-  } catch (error) {
-    console.error("AdminLayout: CRITICAL ERROR reading headers or determining pathname:", error);
-    console.warn("AdminLayout: Defaulting actualPathname to '/admin/login' due to critical error to prevent session issues on login page.");
-    actualPathname = '/admin/login'; // Safe default in case of any error during header processing
-  }
-   
-  console.log("AdminLayout: Final determined pathname for session logic:", actualPathname);
-  
+  // Always attempt to get the session.
+  // Middleware is responsible for redirecting to /admin/login if user is unauthenticated and tries to access protected admin routes.
+  // For /admin/login itself, session will likely be null, and layout will render minimal UI.
   let session: UserSession | null = null;
-
-  if (actualPathname === '/admin/login') {
-    console.log("AdminLayout: Current path IS /admin/login. SKIPPING getSession() call for this layout render pass.");
-  } else {
-    console.log(`AdminLayout: Current path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
-    try {
-      session = await getSession();
-      // console.log("AdminLayout: Session object received:", session ? JSON.stringify(session, null, 2) : "null");
-    } catch (error) {
-      console.error("AdminLayout: CRITICAL Error fetching session:", error);
-      session = null; // Ensure session is null on error
-    }
+  try {
+    console.log("AdminLayout: Attempting to call getSession().");
+    session = await getSession();
+    // console.log("AdminLayout: Session object received:", session ? JSON.stringify(session, null, 2) : "null");
+  } catch (error) {
+    console.error("AdminLayout: CRITICAL Error fetching session:", error);
+    session = null; // Ensure session is null on error
   }
   
   const isAuthenticated = session?.isAuthenticated || false;

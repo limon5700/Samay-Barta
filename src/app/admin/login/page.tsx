@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ export default function LoginPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    setServerVars(null); // Clear previous server vars check
+    setServerVars(null); 
     setIsLoading(true);
     console.log("LoginPage: handleSubmit invoked for user:", username);
     try {
@@ -44,8 +44,9 @@ export default function LoginPage() {
         console.warn("LoginPage: Login successful but redirectPath missing, redirecting to /admin/dashboard (fallback). Result:", result);
         router.push("/admin/dashboard");
       } else {
-        console.error("LoginPage: Login failed. Result error from action:", result?.error);
-        setError(result?.error || "Login failed. Please check your credentials.");
+        const errorMessage = result?.error || "Login failed. Please check your credentials.";
+        console.error("LoginPage: Login failed. Result error from action:", errorMessage);
+        setError(errorMessage);
       }
     } catch (err: any) {
       console.error("LoginPage: handleSubmit caught an unexpected error:", err);
@@ -56,7 +57,15 @@ export default function LoginPage() {
 
       let displayError = "An unexpected error occurred during login. Please try again.";
       if (err.message) {
-        displayError += ` Details: ${err.message}`;
+        // Check if the error is about "NEXT_REDIRECT" - this isn't an error for the user.
+        if (err.message.includes('NEXT_REDIRECT')) {
+          // This is expected if the server action itself calls redirect.
+          // The page should be navigating. If it's not, the redirect in server action isn't working.
+          // No need to set an error for the user in this case.
+          console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be happening.");
+        } else {
+           displayError += ` Details: ${err.message}`;
+        }
       } else if (typeof err === 'string') {
         displayError += ` Details: ${err}`;
       }
@@ -64,7 +73,9 @@ export default function LoginPage() {
       if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
         displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
       }
-      setError(displayError);
+      if(!err.message?.includes('NEXT_REDIRECT')) {
+        setError(displayError);
+      }
     } finally {
       setIsLoading(false);
     }
