@@ -2,6 +2,7 @@
 "use server";
 
 import { cookies as nextCookies } from "next/headers"; // Aliased import
+import type { ReadonlyRequestCookies } from 'next/server'; // Import the type
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -32,7 +33,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
   console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
 
   try {
-    const cookieStore = nextCookies(); // Using aliased import
+    const cookieStore = nextCookies() as ReadonlyRequestCookies; // Type assertion
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -64,6 +65,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     } else {
       console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
       if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { 
+         // Add a more specific log if a user tries to log in with the initial admin username but server has no runtime config
          console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue.`);
          return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
@@ -75,11 +77,12 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
     if (user && user.isActive) {
       console.log(`loginAction: Database user '${username}' found and is active.`);
-      const passwordMatch = password === user.passwordHash; 
+      // In a real app, use bcrypt.compare(password, user.passwordHash);
+      const passwordMatch = password === user.passwordHash; // Simplified for now
 
       if (passwordMatch) {
         console.log("loginAction: Database user password MATCH for:", username);
-        cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, { // Using aliased import
+        cookieStore.set(SESSION_COOKIE_NAME, `user_id:${user.id}`, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -101,14 +104,20 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
+    // Handle NEXT_REDIRECT error specifically, as it's part of Next.js flow and not a "true" error to be displayed to user
+    if (e.digest?.startsWith('NEXT_REDIRECT')) {
+      console.log("loginAction: Caught NEXT_REDIRECT, re-throwing.");
+      throw e;
+    }
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
+    // Return a generic error to the client, log the detailed one on the server.
     return { success: false, error: `An unexpected server error occurred. Please check server logs. Details: ${e.message}` };
   }
 }
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = nextCookies(); // Using aliased import
+  const cookieStore = nextCookies() as ReadonlyRequestCookies; // Type assertion
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -116,7 +125,7 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  const cookieStore = nextCookies(); // Using aliased import
+  const cookieStore = nextCookies() as ReadonlyRequestCookies; // Type assertion
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -159,7 +168,7 @@ export async function getSession(): Promise<UserSession | null> {
         };
     } else {
       console.warn(`getSession: env_admin cookie validation FAILED. Cookie username: '${cookieUsername}', Runtime env username: '${runtimeEnvAdminUsername}'. This could be due to process.env.ADMIN_USERNAME not being available/mismatching at this execution. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
+      cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
     }
   }
@@ -169,7 +178,7 @@ export async function getSession(): Promise<UserSession | null> {
     console.log(`getSession: Found 'user_id:' prefixed cookie. User ID from cookie: '${userId}'`);
     if (!userId) {
         console.warn("getSession: Invalid user_id cookie - no user ID found after colon. Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
 
@@ -206,19 +215,20 @@ export async function getSession(): Promise<UserSession | null> {
 
       if (!user) console.warn(`getSession: User with ID '${userId}' not found in database. Clearing cookie.`);
       if (user && !user.isActive) console.warn(`getSession: User '${user.username}' (ID: ${userId}) is inactive. Clearing cookie.`);
-      cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
+      cookieStore.delete(SESSION_COOKIE_NAME);
       return null;
 
     } catch (e: any) {
         console.error(`getSession: Error fetching session details for user ID '${userId}':`, e.message, e.stack, "Clearing cookie.");
-        cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
+        cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
   }
 
   console.warn(`getSession: Cookie format invalid or unhandled. Cookie value: '${sessionCookieValue}'. Clearing cookie.`);
-  cookieStore.delete(SESSION_COOKIE_NAME); // Using aliased import
+  cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
+    
 
     
