@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
-    const headersList = await nextHeaders(); 
+    const headersList = await nextHeaders();
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlHeader = headersList.get('next-url');
 
@@ -23,10 +23,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath;
       headersAvailable = true;
     } else if (nextUrlHeader) {
-      let base = 'http://localhost'; 
+      let base = 'http://localhost';
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
-      } else if (typeof window !== 'undefined') { 
+      } else if (typeof window !== 'undefined') {
         base = window.location.origin;
       }
       
@@ -75,7 +75,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            {/* Always show these links if not on the login page */}
             <Button variant="default" size="sm" asChild>
               <Link href="/admin/dashboard" prefetch={false}>
                 <Newspaper className="h-4 w-4 mr-2" />
