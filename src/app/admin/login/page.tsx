@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, type FormEvent, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation"; // No useSearchParams needed for this strategy
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,50 +32,47 @@ export default function LoginPage() {
       formData.append("username", username);
       formData.append("password", password);
       
-      // loginAction will now throw NEXT_REDIRECT on success, or return an error object
       const result = await loginAction(formData);
-      
-      // If loginAction returns (meaning it didn't redirect), it must be an error
-      if (result?.error) {
+      console.log("LoginPage: loginAction raw result:", result); // Log the raw result
+
+      if (result?.success && result.redirectPath) {
+        console.log("LoginPage: Login successful, redirecting to:", result.redirectPath);
+        router.push(result.redirectPath);
+        // No need to setIsLoading(false) here as navigation will occur
+        return; 
+      } else if (result?.error) {
         console.error("LoginPage: Login failed. Result error from action:", result.error);
         setError(result.error);
-      } else if (result && !result.success) {
-        // Fallback for other non-successful returns, though loginAction should throw or return an error string
-        console.error("LoginPage: Login failed with an unexpected response:", result);
-        setError("Login failed. Please check your credentials or server logs.");
       } else {
-        // This case should ideally not be reached if loginAction redirects on success or returns error object
-        console.warn("LoginPage: loginAction returned an unexpected successful response without redirecting. This shouldn't happen.");
-        setError("An unexpected issue occurred with login. Please try again.");
+        console.error("LoginPage: Login failed with an unexpected response format:", result);
+        setError("Login failed. Please check your credentials or server logs.");
       }
 
     } catch (err: any) {
-      console.error("LoginPage: handleSubmit caught an error:", err);
-      console.error("LoginPage: Error name:", err.name);
-      console.error("LoginPage: Error message:", err.message);
-      console.error("LoginPage: Error stack:", err.stack);
-      console.error("LoginPage: Error cause:", err.cause);
-      console.error("LoginPage: Error digest (if any):", err.digest);
-
-      // If it's a NEXT_REDIRECT error, Next.js will handle the redirect. Don't set an error state.
+      console.error("LoginPage: handleSubmit caught an error during loginAction call:", err);
+      // If loginAction itself throws (e.g., due to a NEXT_REDIRECT if it wasn't caught there),
+      // this block will catch it. We need to differentiate.
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
-        console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
-        // Do not set error, allow Next.js to handle the redirect
+          console.log("LoginPage: NEXT_REDIRECT signal caught by client. This is unexpected if loginAction is returning an object.");
+          // This usually means loginAction itself called redirect(), which it shouldn't in this strategy.
+          // Allow Next.js to handle it if it occurs, but it indicates a mismatch in expected flow.
       } else {
-        let displayError = "An unexpected error occurred during login. Please try again.";
-        if (err.message) {
-           displayError += ` Details: ${err.message}`;
-        } else if (typeof err === 'string') {
-           displayError += ` Details: ${err}`;
-        }
-        
-        if (err.name === 'TypeError' && err.message?.toLowerCase().includes('failed to fetch')) {
-          displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
-        }
-        setError(displayError);
+          let displayError = "An unexpected error occurred during login. Please try again.";
+          if (err.message) {
+             displayError += ` Details: ${err.message}`;
+          } else if (typeof err === 'string') {
+             displayError += ` Details: ${err}`;
+          }
+          if (err.message?.toLowerCase().includes('failed to fetch')) {
+            displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash before it can return a proper JSON response. Please check your Vercel environment variables and server logs.";
+          }
+          setError(displayError);
       }
     } finally {
-      setIsLoading(false);
+      // Only set isLoading to false if we haven't navigated away
+      if (!router.asPath.startsWith('/admin/dashboard')) { // A bit of a heuristic
+          setIsLoading(false);
+      }
     }
   };
 
@@ -153,7 +149,7 @@ export default function LoginPage() {
                 <AlertDescription className="text-blue-600 dark:text-blue-400 text-xs space-y-1">
                   <p>MONGODB_URI_IS_SET: <strong>{serverVars.MONGODB_URI_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
                   <p>ADMIN_USERNAME_IS_SET: <strong>{serverVars.ADMIN_USERNAME_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
-                  {serverVars.ADMIN_USERNAME_IS_SET && <p>ADMIN_USERNAME_VALUE: <strong>{String(serverVars.ADMIN_USERNAME_VALUE)}</strong> (Should be 'adminlimon003')</p>}
+                  {serverVars.ADMIN_USERNAME_IS_SET && <p>ADMIN_USERNAME_VALUE: <strong>{String(serverVars.ADMIN_USERNAME_VALUE)}</strong></p>}
                   <p>ADMIN_PASSWORD_IS_SET: <strong>{serverVars.ADMIN_PASSWORD_IS_SET ? "Yes" : "No - CRITICAL"}</strong></p>
                   <p>GEMINI_API_KEY_IS_SET: <strong>{serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No - AI features will fail"}</strong></p>
                   <p>NODE_ENV: <strong>{String(serverVars.NODE_ENV)}</strong></p>
