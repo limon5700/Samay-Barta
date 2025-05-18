@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
-    const headersList = await nextHeaders(); // Use await here
+    const headersList = await nextHeaders(); 
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlHeader = headersList.get('next-url');
 
@@ -23,12 +23,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath;
       headersAvailable = true;
     } else if (nextUrlHeader) {
-      let base = 'http://localhost'; // Default base for URL parsing
-      // Try to get a more realistic base URL if available (e.g., from env)
-      // This helps if next-url is a relative path, though it's often absolute.
+      let base = 'http://localhost'; 
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
-      } else if (typeof window !== 'undefined') { // Fallback for client-side contexts (less likely here)
+      } else if (typeof window !== 'undefined') { 
         base = window.location.origin;
       }
       
@@ -38,16 +36,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         headersAvailable = true;
       } catch (urlParseError) {
         console.error(`AdminLayout: Error parsing next-url header ('${nextUrlHeader}') with base ('${base}'). Error:`, urlParseError);
-        // If parsing fails, use the raw header value as a last resort,
-        // though it might include query strings.
         actualPathname = nextUrlHeader; 
         headersAvailable = true; 
       }
     }
     
     if (!actualPathname && headersAvailable) { 
-        // This case means headers were gettable, but both x-invoke-path and next-url were null/empty,
-        // or next-url parsing resulted in an empty pathname.
         console.warn("AdminLayout: Headers were available but pathname determination resulted in null/empty. Defaulting to '/admin/login' for safety.");
         actualPathname = '/admin/login'; 
     }
@@ -57,7 +51,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     actualPathname = '/admin/login'; 
   }
 
-  // Final fallback if all header processing fails or doesn't yield a path.
   if (!headersAvailable && !actualPathname) { 
     console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive, and no error was caught during processing. Defaulting actualPathname to '/admin/login' to prevent issues.");
     actualPathname = '/admin/login'; 
@@ -82,6 +75,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
+            {/* Always show these links if not on the login page */}
             <Button variant="default" size="sm" asChild>
               <Link href="/admin/dashboard" prefetch={false}>
                 <Newspaper className="h-4 w-4 mr-2" />
