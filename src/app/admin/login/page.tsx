@@ -36,22 +36,18 @@ export default function LoginPage() {
       const result = await loginAction(formData);
       console.log("LoginPage: loginAction raw result:", result);
 
-
-      if (result?.error) {
+      if (result?.success && result?.redirectPath) {
+        console.log("LoginPage: loginAction returned success, attempting client-side redirect to:", result.redirectPath);
+        router.push(result.redirectPath);
+        // isLoading will be reset by component unmount or if error occurs before push
+        return; 
+      } else if (result?.error) {
         console.error("LoginPage: Login failed. Error from loginAction:", result.error);
         setError(result.error);
-      } else if (result?.success === false) {
-        console.error("LoginPage: Login attempt was unsuccessful (success:false), but no specific error was returned from loginAction.");
-        setError("Login failed. Please check your credentials or server logs.");
-      } else if (result?.success === true && !result.redirectPath) {
-        // This case should ideally not happen if loginAction always calls redirect() upon success.
-        // If redirect() is used, it should throw NEXT_REDIRECT and be caught below.
-        console.error("LoginPage: loginAction returned success but no redirectPath, and did not throw NEXT_REDIRECT. This is unexpected.");
-        setError("Login succeeded but redirection mechanism failed. Please contact support.");
+      } else {
+        console.error("LoginPage: Login attempt was unsuccessful or result was unexpected:", result);
+        setError("Login failed. Please check your credentials or server logs for more details.");
       }
-      // If loginAction uses redirect(), it throws NEXT_REDIRECT which is caught below.
-      // If it successfully returns an object { success: true, redirectPath: ...}, that's an issue.
-
     } catch (err: any) {
       console.error("LoginPage: handleSubmit caught an error:", err);
       console.error("LoginPage: Error name:", err.name);
@@ -59,29 +55,17 @@ export default function LoginPage() {
       console.error("LoginPage: Error stack:", err.stack);
       console.error("LoginPage: Error cause:", err.cause);
       console.error("LoginPage: Error digest (if any):", err.digest);
-
-      if (err.digest?.startsWith('NEXT_REDIRECT')) {
-          console.log("LoginPage: NEXT_REDIRECT signal caught from loginAction. Navigation should be handled by Next.js. Digest:", err.digest);
-          // No need to setError here. isLoading will be reset in finally if not unmounted.
-          // However, we return to ensure setIsLoading(false) in finally isn't prematurely called
-          // if the component unmounts due to redirect.
-          return;
-      } else {
-          let displayError = "An unexpected issue occurred with login. Please try again.";
-          if (err.message) {
-             displayError = `Login failed: ${err.message}`;
-          }
-          if (err.message?.toLowerCase().includes('failed to fetch')) {
-            displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables and server logs.";
-          }
-          setError(displayError);
+      
+      let displayError = "An unexpected issue occurred with login. Please try again.";
+      if (err.message) {
+         displayError = `Login failed: ${err.message}`;
       }
+      if (err.message?.toLowerCase().includes('failed to fetch')) {
+        displayError = "Failed to connect to the server for login. This can happen if server-side environment variables (like MONGODB_URI, ADMIN_USERNAME, ADMIN_PASSWORD) are missing or incorrect, causing the server action to crash. Please check your Vercel environment variables (if deployed) or local .env file, and server logs.";
+      }
+      setError(displayError);
     } finally {
-      // This will run regardless of whether an error was caught or not,
-      // unless the catch block explicitly returned (like for NEXT_REDIRECT).
-      // If NEXT_REDIRECT occurred, the component might unmount before this runs, or it might run.
-      // Setting isLoading to false here is generally safe.
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 
@@ -164,7 +148,7 @@ export default function LoginPage() {
                   <p>NODE_ENV: <strong>{String(serverVars.NODE_ENV)}</strong></p>
                   <p>VERCEL_ENV: <strong>{String(serverVars.VERCEL_ENV)}</strong></p>
                   {(!serverVars.MONGODB_URI_IS_SET || !serverVars.ADMIN_USERNAME_IS_SET || !serverVars.ADMIN_PASSWORD_IS_SET) && (
-                    <p className="font-bold text-destructive mt-2">One or more critical environment variables are NOT SET on the server. Please set them in your Vercel project settings and redeploy.</p>
+                    <p className="font-bold text-destructive mt-2">One or more critical environment variables are NOT SET on the server. Please set them in your Vercel project settings (if deployed) or .env file (for local) and redeploy/restart.</p>
                   )}
                 </AlertDescription>
               </Alert>
@@ -189,5 +173,4 @@ export default function LoginPage() {
     </div>
   );
 }
-
     
