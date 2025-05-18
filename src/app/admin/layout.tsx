@@ -1,10 +1,10 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers } from 'next/headers';
+import { headers as nextHeaders } from 'next/headers'; // Aliased import
 import { Button } from '@/components/ui/button';
 import { Home, Newspaper, LogOut, Layout, Users, BarChart3 } from 'lucide-react';
-import { logoutAction } from '@/app/admin/auth/actions'; // getSession removed
+import { logoutAction } from '@/app/admin/auth/actions';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   console.log("AdminLayout: Initializing...");
@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
-    const headersList = headers();
+    const headersList = await nextHeaders(); // Use await here
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlHeader = headersList.get('next-url');
 
@@ -23,41 +23,48 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath;
       headersAvailable = true;
     } else if (nextUrlHeader) {
-      let base = 'http://localhost';
+      let base = 'http://localhost'; // Default base for URL parsing
+      // Try to get a more realistic base URL if available (e.g., from env)
+      // This helps if next-url is a relative path, though it's often absolute.
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
+      } else if (typeof window !== 'undefined') { // Fallback for client-side contexts (less likely here)
+        base = window.location.origin;
       }
+      
       try {
         const fullUrl = new URL(nextUrlHeader, base);
         actualPathname = fullUrl.pathname;
         headersAvailable = true;
       } catch (urlParseError) {
         console.error(`AdminLayout: Error parsing next-url header ('${nextUrlHeader}') with base ('${base}'). Error:`, urlParseError);
-        actualPathname = nextUrlHeader; // Fallback to using the raw header value if parsing fails
-        headersAvailable = true;
+        // If parsing fails, use the raw header value as a last resort,
+        // though it might include query strings.
+        actualPathname = nextUrlHeader; 
+        headersAvailable = true; 
       }
     }
     
     if (!actualPathname && headersAvailable) { 
-        console.warn("AdminLayout: Headers were available but pathname determination resulted in null. Defaulting to '/admin/login' for safety.");
+        // This case means headers were gettable, but both x-invoke-path and next-url were null/empty,
+        // or next-url parsing resulted in an empty pathname.
+        console.warn("AdminLayout: Headers were available but pathname determination resulted in null/empty. Defaulting to '/admin/login' for safety.");
         actualPathname = '/admin/login'; 
     }
 
   } catch (error) {
-    console.error("AdminLayout: Error accessing headers. Defaulting pathname to '/admin/login' to prevent session check issues. Error:", error);
+    console.error("AdminLayout: Error accessing or processing headers. Defaulting pathname to '/admin/login' to prevent potential issues. Error:", error);
     actualPathname = '/admin/login'; 
   }
 
+  // Final fallback if all header processing fails or doesn't yield a path.
   if (!headersAvailable && !actualPathname) { 
-    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent session check issues.");
+    console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive, and no error was caught during processing. Defaulting actualPathname to '/admin/login' to prevent issues.");
     actualPathname = '/admin/login'; 
   }
   
-  console.log(`AdminLayout: Final determined pathname: ${actualPathname}`);
+  console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
 
-  // If it's the login page, or if we couldn't reliably determine the path, we might not want to show authenticated links.
-  // However, as per user request to remove getSession from this layout, we'll assume if they are past middleware, they should see links.
-  // The middleware is now the primary gatekeeper for authenticated routes.
   const showAdminNav = actualPathname !== '/admin/login';
 
   return (
@@ -66,7 +73,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <Link href={showAdminNav ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity" prefetch={false}>
           Samay Barta Lite - Admin
         </Link>
-        {showAdminNav && ( // Only show these nav items if not on the login page
+        {showAdminNav && ( 
           <nav className="ml-auto flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" asChild>
               <Link href="/" prefetch={false}>
