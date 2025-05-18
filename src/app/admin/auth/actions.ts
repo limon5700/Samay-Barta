@@ -1,8 +1,7 @@
 
 "use server";
 
-import { cookies as nextCookies } from "next/headers"; // Use cookies directly
-// Removed: import type { ReadonlyRequestCookies } from 'next/server'; 
+import { cookies as nextCookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { getUserByUsername, getUserById, getPermissionsForUser, getRoleById } from "@/lib/data";
@@ -12,7 +11,6 @@ import type { UserSession, Permission } from "@/lib/types";
 // import bcrypt from 'bcryptjs';
 
 // Module-level check for logging during server startup/build
-// These are read once when the module loads, primarily for comparison/logging if runtime env vars are missing
 const INITIAL_ENV_ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const INITIAL_ENV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -26,16 +24,19 @@ if (!INITIAL_ENV_ADMIN_USERNAME || !INITIAL_ENV_ADMIN_PASSWORD) {
 
 export async function loginAction(formData: FormData): Promise<{ success: boolean; error?: string; redirectPath?: string }> {
   console.log("loginAction: Invoked.");
-  
+  console.log("loginAction: Checking initial process.env values at runtime - ADMIN_USERNAME:", process.env.ADMIN_USERNAME ? `SET (length: ${process.env.ADMIN_USERNAME.length})` : "NOT SET", "ADMIN_PASSWORD:", process.env.ADMIN_PASSWORD ? "SET (length: anystring)" : "NOT SET", "MONGODB_URI:", process.env.MONGODB_URI ? `SET (length: ${process.env.MONGODB_URI.length})` : "NOT SET");
+
+
   // Read environment variables AT RUNTIME within the action
   const currentRuntimeAdminUsername = process.env.ADMIN_USERNAME;
   const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
-  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
-  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
+  console.log(`loginAction: Runtime process.env.ADMIN_USERNAME after explicit read: '${currentRuntimeAdminUsername}'`);
+  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD after explicit read is ${currentRuntimeAdminPassword ? 'set (length: ' + currentRuntimeAdminPassword.length + ')' : 'NOT SET'}`);
+
 
   try {
-    const cookieStore = await nextCookies(); 
+    const cookieStore = nextCookies();
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
@@ -59,15 +60,14 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
           return { success: true, redirectPath: "/admin/dashboard" };
         } else {
           console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for .env admin username:", username);
-          return { success: false, error: "Invalid password for admin user." };
+          // Do not immediately return; proceed to database check as per requirements.
         }
       } else {
          console.log(`loginAction: Submitted username '${username}' does not match runtime .env admin username '${currentRuntimeAdminUsername}'. Proceeding to database check.`);
       }
     } else {
       console.warn("loginAction: Server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. Cannot perform .env admin login.");
-      // More specific check: if user *tried* to log in as the INITIAL (build-time) admin, but runtime env vars are missing
-      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME) { 
+      if (username === INITIAL_ENV_ADMIN_USERNAME && INITIAL_ENV_ADMIN_USERNAME && (!currentRuntimeAdminUsername || !currentRuntimeAdminPassword)) {
          console.error(`loginAction: User attempted to log in as potential .env admin ('${username}'), but server has NO ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env at runtime. This is a server configuration issue (e.g., missing in Vercel).`);
          return { success: false, error: "Server-side admin credentials are not configured. Please contact administrator. (Error Code: ENV_ADMIN_RUNTIME_MISSING)" };
       }
@@ -106,14 +106,11 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
     return { success: false, error: "Invalid username or password." };
 
   } catch (e: any) {
-    // Important: Check if it's a NEXT_REDIRECT error and re-throw it.
-    // Server Actions that redirect using `redirect()` throw this special error.
     if (e.digest?.startsWith('NEXT_REDIRECT')) {
       console.log("loginAction: Caught NEXT_REDIRECT, re-throwing.");
       throw e;
     }
     console.error("loginAction: UNEXPECTED CRITICAL ERROR during loginAction execution:", e.message, e.stack);
-    // Provide a more specific error message if possible, or a generic one if not.
     const errorMessage = e.message || "An unknown server error occurred.";
     return { success: false, error: `An unexpected server error occurred during login. Please check server logs. Details: ${errorMessage}` };
   }
@@ -121,7 +118,7 @@ export async function loginAction(formData: FormData): Promise<{ success: boolea
 
 export async function logoutAction() {
   'use server';
-  const cookieStore = await nextCookies(); 
+  const cookieStore = nextCookies();
   console.log("logoutAction: Deleting session cookie and redirecting to /admin/login.");
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect("/admin/login");
@@ -129,7 +126,9 @@ export async function logoutAction() {
 
 export async function getSession(): Promise<UserSession | null> {
   'use server';
-  const cookieStore = await nextCookies(); 
+  console.log("getSession: Checking initial process.env values at runtime - ADMIN_USERNAME:", process.env.ADMIN_USERNAME ? `SET (length: ${process.env.ADMIN_USERNAME.length})` : "NOT SET", "MONGODB_URI:", process.env.MONGODB_URI ? `SET (length: ${process.env.MONGODB_URI.length})` : "NOT SET");
+
+  const cookieStore = nextCookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
 
@@ -150,7 +149,6 @@ export async function getSession(): Promise<UserSession | null> {
     return null;
   }
 
-  // Read runtime env var for comparison *inside* getSession
   const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
   console.log(`getSession: Runtime process.env.ADMIN_USERNAME for env_admin check: '${runtimeEnvAdminUsername}'`);
 
@@ -234,8 +232,3 @@ export async function getSession(): Promise<UserSession | null> {
   cookieStore.delete(SESSION_COOKIE_NAME);
   return null;
 }
-    
-    
-
-    
-
