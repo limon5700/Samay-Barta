@@ -30,7 +30,7 @@ export default function LoginPage() {
       formData.append("password", password);
       
       const result = await loginAction(formData);
-      console.log("LoginPage: loginAction result:", result);
+      console.log("LoginPage: loginAction raw result:", result); // Log the raw result
 
       if (result?.success && result.redirectPath) {
         console.log("LoginPage: Login successful, redirecting to:", result.redirectPath);
@@ -38,10 +38,10 @@ export default function LoginPage() {
         router.push(redirectUrlFromParams || result.redirectPath);
       } else if (result?.success) {
         // Fallback if redirectPath is missing for some reason, though it shouldn't be.
-        console.log("LoginPage: Login successful, redirecting to /admin/dashboard (fallback).");
+        console.warn("LoginPage: Login successful but redirectPath missing, redirecting to /admin/dashboard (fallback). Result:", result);
         router.push("/admin/dashboard");
       } else {
-        console.error("LoginPage: Login failed. Result error:", result?.error);
+        console.error("LoginPage: Login failed. Result error from action:", result?.error);
         setError(result?.error || "Login failed. Please check your credentials.");
       }
     } catch (err: any) {
