@@ -9,22 +9,18 @@ import type { UserSession, Permission } from '@/lib/types';
 
 const hasPermission = (session: UserSession | null, permission: string): boolean => {
   if (!session || !session.isAuthenticated) {
-    // console.log(`hasPermission for '${permission}': Session not authenticated. Returning false.`);
     return false;
   }
   if (session.isEnvAdmin) {
-    // console.log(`hasPermission for '${permission}': Session isEnvAdmin is true. Returning true.`);
     return true;
   }
   const hasPerm = session.permissions?.includes(permission as Permission) || false;
-  // console.log(`hasPermission for '${permission}': User has permission: ${hasPerm}. Permissions list: ${session.permissions?.join(', ')}`);
   return hasPerm;
 };
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   console.log("AdminLayout: Initializing...");
 
-  // Pathname determination logic
   let actualPathname: string | null = null;
   let headersAvailable = false;
   try {
@@ -39,12 +35,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath;
       headersAvailable = true;
     } else if (nextUrlHeader) {
-      // Parse the full URL and get the pathname part
-      // Ensure a base URL is provided if nextUrlHeader might be relative
-      let base = 'http://localhost'; // Default base
+      let base = 'http://localhost'; 
       if (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_SITE_URL) {
         base = process.env.NEXT_PUBLIC_SITE_URL;
-      } else if (typeof window !== 'undefined') {
+      } else if (typeof window !== 'undefined') { // Should not run in server component, but defensive
         base = window.location.origin;
       }
       const fullUrl = new URL(nextUrlHeader, base);
@@ -53,14 +47,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     }
     
     if (!actualPathname && headersAvailable) { 
-        actualPathname = '/';
+        console.warn("AdminLayout: Headers were available but pathname determination resulted in null. Defaulting to '/' temporarily.");
+        actualPathname = '/'; // Fallback if headers are present but path extraction fails
     }
 
   } catch (error) {
-    console.error("AdminLayout: Error accessing headers. This might happen during pre-rendering or if headers are not available in this context.", error);
+    console.error("AdminLayout: Error accessing headers. This might happen during pre-rendering or if headers are not available in this context. Defaulting pathname for safety.", error);
+    actualPathname = '/admin/login'; // Default to login path if headers() call fails
   }
 
-  if (!headersAvailable && !actualPathname) { // If headers were unavailable AND actualPathname is still null
+  if (!headersAvailable && !actualPathname) { 
     console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers are missing or inconclusive. Defaulting actualPathname to '/admin/login' to prevent cookie errors on login page.");
     actualPathname = '/admin/login'; 
   }
@@ -68,8 +64,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   console.log(`AdminLayout: Final determined pathname for session logic: ${actualPathname}`);
 
   let session: UserSession | null = null;
-  // Always attempt to get session unless it's the login page determined by path.
-  // Middleware handles actual redirection for unauthenticated access to protected routes.
   if (actualPathname !== '/admin/login') {
     console.log(`AdminLayout: Path is '${actualPathname}' (NOT /admin/login). Attempting to fetch session.`);
     try {
@@ -80,7 +74,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       session = null; 
     }
   } else {
-    console.log(`AdminLayout: Current path IS /admin/login. SKIPPING getSession() call for this layout render pass.`);
+    console.log(`AdminLayout: Current path IS /admin/login (or headers were unavailable and defaulted to it). SKIPPING getSession() call for this layout render pass.`);
   }
   
   const isAuthenticated = session?.isAuthenticated || false;
