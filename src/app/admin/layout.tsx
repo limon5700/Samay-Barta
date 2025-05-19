@@ -1,23 +1,22 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers';
+import { headers as nextHeaders } from 'next/headers'; // Keep for pathname detection
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, Layout as LayoutIcon, BarChart3 } from 'lucide-react'; // LogOut and user-related icons removed
+import { Home, Newspaper, Layout as LayoutIcon, BarChart3, Users, Settings, LogOut } from 'lucide-react';
+import { logoutAction } from '@/app/admin/auth/actions'; // For the logout button
 
-// No getSession or logoutAction needed as auth is disabled
+// No getSession() call here for rendering links. Middleware handles protection.
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  console.log("AdminLayout: Initializing (Authentication Disabled)...");
+  console.log("AdminLayout: Initializing...");
 
   let actualPathname = '';
-  let showAdminNav = true; // Default to true, hide only if on the login page (which now auto-redirects)
+  let showAdminNav = true; // Default to true, hide only if on the login page
   let headersAvailable = false;
 
   try {
-    // Attempt to read headers to determine if we are on the login page
-    // (although login page will redirect, this logic prevents nav flashing)
-    const headersList = await nextHeaders();
+    const headersList = await nextHeaders(); // Use await as TS requires
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlPath = headersList.get('next-url');
 
@@ -29,30 +28,31 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       headersAvailable = true;
     } else if (nextUrlPath && nextUrlPath !== 'null' && nextUrlPath.trim() !== '') {
       try {
-        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined;
+        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined; // Provide base for relative URLs
         const url = new URL(nextUrlPath, base);
         actualPathname = url.pathname.trim();
         headersAvailable = true;
       } catch (e) {
         console.warn("AdminLayout: Error parsing next-url header. Pathname determination might be affected.", e);
+        // Fallback to a state that likely shows nav if parsing fails
+        actualPathname = '/admin/dashboard'; // Sensible default if parsing fails
       }
     }
 
     if (!headersAvailable) {
-      console.log("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Assuming NOT on login page for nav display.");
-      actualPathname = '/admin/dashboard'; // Default to a non-login admin path
+      console.log("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' (assuming not on login page).");
+      actualPathname = '/admin/dashboard'; // If headers are missing, assume we are in an admin page
     }
 
   } catch (error: any) {
-    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav.", error);
+    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav assuming not on login page.", error);
     // If headers() fails, default to a state that shows nav.
-    actualPathname = '/admin/dashboard'; // Default to a non-login admin path
+    actualPathname = '/admin/dashboard'; // Sensible default if headers fail
   }
 
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
 
   if (actualPathname === '/admin/login') {
-    // This case is mainly for the brief moment before login page redirects.
     showAdminNav = false;
   }
 
@@ -85,7 +85,15 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            {/* User & Role Management link is removed as user roles are disabled */}
+            {/* User & Role Management link is removed as per your request to remove user role system */}
+            {/* 
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/users" prefetch={false}>
+                <Users className="h-4 w-4 mr-2" />
+                User & Role Mgmt
+              </Link>
+            </Button>
+            */}
 
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/seo" prefetch={false}>
@@ -94,7 +102,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            {/* Logout button removed as authentication is disabled */}
+            <form action={logoutAction}>
+              <Button type="submit" variant="destructive" size="sm">
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </form>
           </nav>
         )}
       </header>
