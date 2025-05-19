@@ -1,6 +1,5 @@
 
-
-import type { NewsArticle, Category, Permission } from './types';
+import type { NewsArticle, Category } from './types'; // Permission type removed
 
 export interface LanguageOption {
   value: string;
@@ -60,7 +59,6 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleContentLabel: "Content",
     publishedDateLabel: "Published",
     error: "Error",
-    // SEO related texts
     seoSiteTitleLabel: "Site Title",
     seoMetaDescriptionLabel: "Meta Description",
     seoMetaKeywordsLabel: "Meta Keywords (comma-separated)",
@@ -80,35 +78,7 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleOgDescriptionLabel: "Open Graph Description (Social)",
     articleOgImageLabel: "Open Graph Image URL (Social)",
     articleCanonicalUrlLabel: "Canonical URL (Advanced)",
-    // User Roles
-    userManagement: "User Management",
-    roleManagement: "Role Management",
-    addUser: "Add User",
-    editUser: "Edit User",
-    deleteUser: "Delete User",
-    addRole: "Add Role",
-    editRole: "Edit Role",
-    deleteRole: "Delete Role",
-    username: "Username",
-    password: "Password",
-    email: "Email (Optional)",
-    roles: "Roles",
-    permissions: "Permissions",
-    roleName: "Role Name",
-    userActive: "Active",
-    confirmDeletion: "Confirm Deletion",
-    cancel: "Cancel",
-    save: "Save",
-    manage_articles: "Manage Articles",
-    publish_articles: "Publish Articles",
-    manage_users: "Manage Users",
-    manage_roles: "Manage Roles",
-    manage_layout_gadgets: "Manage Layout/Gadgets",
-    manage_seo_global: "Manage Global SEO",
-    manage_settings: "Manage Site Settings",
-    view_admin_dashboard: "View Admin Dashboard",
-
-
+    // User Roles related texts are removed
   },
   bn: {
     appName: "সময় বার্তা লাইট",
@@ -147,7 +117,6 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleContentLabel: "বিষয়বস্তু",
     publishedDateLabel: "প্রকাশিত",
     error: "ত্রুটি",
-    // SEO related texts
     seoSiteTitleLabel: "সাইটের শিরোনাম",
     seoMetaDescriptionLabel: "মেটা বর্ণনা",
     seoMetaKeywordsLabel: "মেটা কীওয়ার্ড (কমা দ্বারা পৃথক)",
@@ -167,33 +136,7 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleOgDescriptionLabel: "ওপেন গ্রাফ বর্ণনা (সোশ্যাল)",
     articleOgImageLabel: "ওপেন গ্রাফ ছবির ইউআরএল (সোশ্যাল)",
     articleCanonicalUrlLabel: "ক্যানোনিকাল ইউআরএল (অ্যাডভান্সড)",
-     // User Roles
-    userManagement: "ব্যবহারকারী ব্যবস্থাপনা",
-    roleManagement: "ভূমিকা ব্যবস্থাপনা",
-    addUser: "ব্যবহারকারী যোগ করুন",
-    editUser: "ব্যবহারকারী সম্পাদনা করুন",
-    deleteUser: "ব্যবহারকারী মুছুন",
-    addRole: "ভূমিকা যোগ করুন",
-    editRole: "ভূমিকা সম্পাদনা করুন",
-    deleteRole: "ভূমিকা মুছুন",
-    username: "ব্যবহারকারীর নাম",
-    password: "পাসওয়ার্ড",
-    email: "ইমেইল (ঐচ্ছিক)",
-    roles: "ভূমিকা",
-    permissions: "অনুমতি",
-    roleName: "ভূমিকার নাম",
-    userActive: "সক্রিয়",
-    confirmDeletion: "মোছা নিশ্চিত করুন",
-    cancel: "বাতিল",
-    save: "সংরক্ষণ করুন",
-    manage_articles: "নিবন্ধ পরিচালনা করুন",
-    publish_articles: "নিবন্ধ প্রকাশ করুন",
-    manage_users: "ব্যবহারকারী পরিচালনা করুন",
-    manage_roles: "ভূমিকা পরিচালনা করুন",
-    manage_layout_gadgets: "লেআউট/গ্যাজেট পরিচালনা করুন",
-    manage_seo_global: "গ্লোবাল এসইও পরিচালনা করুন",
-    manage_settings: "সাইট সেটিংস পরিচালনা করুন",
-    view_admin_dashboard: "অ্যাডমিন ড্যাশবোর্ড দেখুন",
+    // User Roles related texts are removed
   },
 };
 
@@ -225,13 +168,4 @@ export const initialSampleNewsArticles: NewsArticle[] = [
   },
 ];
 
-export const availablePermissions: Permission[] = [
-  'manage_articles',
-  'publish_articles',
-  'manage_users',
-  'manage_roles',
-  'manage_layout_gadgets',
-  'manage_seo_global',
-  'manage_settings',
-  'view_admin_dashboard',
-];
+// availablePermissions array removed

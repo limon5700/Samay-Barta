@@ -32,7 +32,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (storedTheme) {
       setThemeState(storedTheme);
     } else {
-      // Set initial theme based on system preference if no stored theme
       const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       setThemeState(systemPrefersDark ? 'dark' : 'light');
     }
@@ -47,7 +46,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (theme === 'system') {
       const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.classList.toggle('dark', systemPrefersDark);
-      localStorage.removeItem('theme'); // Remove theme from storage if system is selected
+      localStorage.removeItem('theme'); 
     } else {
       document.documentElement.classList.toggle('dark', theme === 'dark');
       localStorage.setItem('theme', theme);
@@ -71,7 +70,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const getUIText = useCallback((key: string): string => {
-    if (!isClient) return uiTexts[defaultLanguage]?.[key] || key; // Fallback for SSR
+    // Removed user/role specific fallback texts as they are no longer in uiTexts
+    if (!isClient) return uiTexts[defaultLanguage]?.[key] || key; 
     return uiTexts[language]?.[key] || uiTexts[defaultLanguage]?.[key] || key;
   }, [language, isClient]);
 

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PlusCircle, Edit, Trash2, Loader2, BarChartBig, Users, FileText, Zap, Activity, CalendarClock, Eye, AlertTriangle } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Loader2, BarChartBig, FileText, Zap, Activity, CalendarClock, Eye, AlertTriangle } from "lucide-react";
 import { formatInTimeZone } from 'date-fns-tz';
 import { Button } from "@/components/ui/button";
 import {
@@ -30,18 +30,17 @@ import {
   updateNewsArticle,
   deleteNewsArticle,
   getDashboardAnalytics,
-  getTopUserPostActivity
-} from "@/lib/data";
+} from "@/lib/data"; // Removed getTopUserPostActivity
 import { useToast } from "@/hooks/use-toast";
 import AnalyticsCard from "@/components/admin/AnalyticsCard";
-import ErrorBoundary from "@/components/ErrorBoundary"; // Import the ErrorBoundary
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
 export default function DashboardPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
-  const [topUsersActivity, setTopUsersActivity] = useState<any[]>([]);
+  // Removed topUsersActivity state
 
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
@@ -66,17 +65,16 @@ export default function DashboardPage() {
               <p className="font-semibold border-b pb-2 mb-2">Specific Error: {pageError}</p>
             )}
             <p>
-                If the dashboard is blank, not loading correctly, or you're experiencing login loops, please check the following:
+                If the dashboard is blank or not loading correctly, please check the following:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Environment Variables (Crucial for Vercel):</strong> Ensure <code>MONGODB_URI</code>, <code>GEMINI_API_KEY</code> (if AI features used), <code>ADMIN_USERNAME</code>, and <code>ADMIN_PASSWORD</code> are correctly set in your <strong>Vercel project settings</strong> for the Production environment (and Preview/Development if you use them). This is the most common cause of login failures and dashboard loading issues on Vercel. For local development, ensure they are correct in your <code>.env</code> file. The <code>MONGODB_URI</code> must be complete and not contain placeholders.</li>
-                <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist includes Vercel's IPs and your local IP. Check if your MongoDB cluster is running and accessible. Incorrect credentials in the URI can also cause connection failures.</li>
-                <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> (if used) is valid and has not exceeded its quota.</li>
-                <li><strong>Server Logs:</strong> Check your Vercel deployment logs (Functions logs) or local terminal output (if running <code>npm run dev</code>) for detailed error messages from the server. These logs are vital for diagnosing "Server Components render" failures, login action failures, or data fetching problems.</li>
-                <li><strong>Browser Extensions:</strong> Errors in the browser console related to <code>extensions.aitopia.ai</code> or similar domains are likely caused by browser extensions and are not part of this application. They can usually be ignored for diagnosing dashboard loading issues.</li>
+                <li><strong>Environment Variables:</strong> Ensure <code>MONGODB_URI</code> and <code>GEMINI_API_KEY</code> (if AI features used) are correctly set. For local development, ensure they are correct in your <code>.env</code> file. For Vercel, set them in project settings.</li>
+                <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist. Check if your MongoDB cluster is running.</li>
+                <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> is valid.</li>
+                <li><strong>Server Logs:</strong> Check Vercel deployment logs or local terminal for detailed error messages.</li>
             </ul>
              <p>
-                If issues persist after checking these, the server logs are the most crucial source for diagnosing the underlying problem. A successful login that redirects back to the login page usually means the server-side `loginAction` failed (check its logs). A blank dashboard often means data fetching for the dashboard page itself failed (check its server logs).
+                If issues persist, the server logs are crucial for diagnosing the problem.
             </p>
         </CardContent>
      </Card>
@@ -85,23 +83,21 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     console.log("DashboardPage: Attempting to fetch dashboard analytics...");
     setIsAnalyticsLoading(true);
-    setPageError(null); // Reset error at the start of fetch
+    setPageError(null);
     try {
-      const [analyticsData, topUsersData] = await Promise.all([
-        getDashboardAnalytics(),
-        getTopUserPostActivity(5) 
-      ]);
+      // Removed topUsersData fetch
+      const analyticsData = await getDashboardAnalytics();
       
-      setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
-      setTopUsersActivity(topUsersData ?? []);
-      console.log("DashboardPage: Analytics and top users data fetched successfully.");
+      setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
+      // Removed setTopUsersActivity
+      console.log("DashboardPage: Analytics data fetched successfully.");
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : "An unknown error occurred";
       console.error("DashboardPage: Failed to fetch dashboard analytics:", error);
       toast({ title: "Error", description: `Failed to fetch dashboard analytics: ${msg}`, variant: "destructive" });
-      setAnalytics({ totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 }, userPostActivity: [] });
-      setTopUsersActivity([]);
+      setAnalytics({ totalArticles: 0, articlesToday: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
+      // Removed setTopUsersActivity for error case
       setPageError(`Analytics fetch failed: ${msg}. Check server logs for details.`);
     } finally {
       setIsAnalyticsLoading(false);
@@ -110,8 +106,7 @@ export default function DashboardPage() {
 
   const fetchArticles = useCallback(async () => {
     console.log("DashboardPage: Attempting to fetch articles...");
-    setIsLoading(true); // This controls the main article list loading
-    // pageError is reset by fetchDashboardData or the combined fetch effect
+    setIsLoading(true);
     try {
       const fetchedArticles = await getAllNewsArticles();
       const safeArticles = Array.isArray(fetchedArticles) ? fetchedArticles : [];
@@ -130,13 +125,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     console.log("DashboardPage: useEffect for initial data fetch triggered.");
-    setPageError(null); // Clear any previous page errors
+    setPageError(null);
     Promise.allSettled([fetchDashboardData(), fetchArticles()])
       .then(results => {
         results.forEach(result => {
           if (result.status === 'rejected') {
             console.error("DashboardPage: Error during one of the initial data fetches:", result.reason);
-            // Page error will be set by individual fetch functions if they fail
           }
         });
       })
@@ -191,7 +185,7 @@ export default function DashboardPage() {
     setIsSubmitting(true);
     try {
       if (editingArticle) {
-         const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = {
+         const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = { // authorId removed from Omit
             title: data.title,
             content: data.content,
             excerpt: data.excerpt,
@@ -289,7 +283,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <AnalyticsCard title="Total Articles" value={analytics.totalArticles.toString()} icon={FileText} />
                 <AnalyticsCard title="Articles Today" value={analytics.articlesToday.toString()} icon={CalendarClock} />
-                <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
+                {/* Total Users card removed */}
                 <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
                 
                 <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
@@ -303,39 +297,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {topUsersActivity.length > 0 && (
-          <Card className="shadow-lg rounded-xl mb-8">
-              <CardHeader>
-                  <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
-                      <Users /> Top User Activity
-                  </CardTitle>
-                  <CardDescription>Most active users by post count (requires authorId tracking on articles).</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader>
-                          <TableRow>
-                              <TableHead>Username</TableHead>
-                              <TableHead>Posts Today</TableHead>
-                              <TableHead>Posts This Week</TableHead>
-                              <TableHead>Posts This Month</TableHead>
-                          </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {topUsersActivity.map(user => (
-                              <TableRow key={user.userId}>
-                                  <TableCell>{user.username}</TableCell>
-                                  <TableCell>{user.postsToday}</TableCell>
-                                  <TableCell>{user.postsThisWeek}</TableCell>
-                                  <TableCell>{user.postsThisMonth}</TableCell>
-                              </TableRow>
-                          ))}
-                      </TableBody>
-                  </Table>
-                   <p className="text-xs text-muted-foreground mt-2">Note: User post activity relies on articles being associated with authors (authorId).</p>
-              </CardContent>
-          </Card>
-        )}
+        {/* Top User Activity section removed */}
 
         <Card className="shadow-lg rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between">

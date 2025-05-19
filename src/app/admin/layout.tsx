@@ -1,15 +1,15 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers'; // Corrected import
+import { headers as nextHeaders } from 'next/headers';
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, Layout as LayoutIcon, Users, BarChart3, LogOut } from 'lucide-react';
-import { logoutAction } from '@/app/admin/auth/actions';
+import { Home, Newspaper, Layout as LayoutIcon, BarChart3 } from 'lucide-react';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  console.log("AdminLayout: Initializing...");
+  console.log("AdminLayout: Initializing (Authentication Disabled)...");
 
   let actualPathname = '';
+  let showAdminNav = true; // Default to showing nav since auth is disabled
 
   try {
     const headersList = await nextHeaders();
@@ -23,32 +23,31 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       actualPathname = xInvokePath.trim();
     } else if (nextUrlPath && nextUrlPath !== 'null' && nextUrlPath.trim() !== '') {
       try {
-        // Use a dummy base URL if the path is relative, URL constructor needs a base.
         const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined;
         const url = new URL(nextUrlPath, base);
         actualPathname = url.pathname.trim();
       } catch (e) {
-        console.warn("AdminLayout: Error parsing next-url header. Pathname will remain undetermined from this header.", e);
-        // actualPathname remains ''
+        console.warn("AdminLayout: Error parsing next-url header. Pathname determination might be affected.", e);
       }
+    } else {
+      console.log("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Pathname remains undetermined from headers.");
     }
-    // If both xInvokePath and nextUrlPath are unhelpful, actualPathname will remain an empty string.
   } catch (error) {
-      console.error("AdminLayout: Error accessing headers. Pathname determination might be affected.", error);
-      // actualPathname remains ''
+    console.error("AdminLayout: Error accessing headers. Pathname determination might be affected.", error);
   }
-  
+
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: '${actualPathname}'`);
 
-  // Show admin navigation if the determined path is NOT '/admin/login'.
-  // If actualPathname is empty (e.g., due to header issues), then ('' !== '/admin/login') is true, so nav will be shown.
-  // This is the desired behavior because middleware is responsible for protecting admin routes other than /admin/login.
-  const showAdminNav = actualPathname !== '/admin/login';
-  
+  // Only hide nav if explicitly on the login page, which now auto-redirects anyway.
+  // So, nav should generally be shown in admin sections.
+  if (actualPathname === '/admin/login') {
+    showAdminNav = false;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-2">
-        <Link href={showAdminNav ? "/admin/dashboard" : "/admin/login"} className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity" prefetch={false}>
+        <Link href="/admin/dashboard" className="text-xl font-semibold text-primary hover:opacity-80 transition-opacity" prefetch={false}>
           Samay Barta Lite - Admin
         </Link>
         {showAdminNav && (
@@ -74,12 +73,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/users" prefetch={false}>
-                <Users className="h-4 w-4 mr-2" />
-                User & Role Mgmt
-              </Link>
-            </Button>
+            {/* User & Role Management link removed */}
 
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/seo" prefetch={false}>
@@ -88,12 +82,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            <form action={logoutAction}>
-              <Button variant="destructive" size="sm" type="submit" className="gap-1.5">
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            </form>
+            {/* Logout button removed */}
           </nav>
         )}
       </header>
