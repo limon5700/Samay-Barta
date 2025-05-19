@@ -159,7 +159,7 @@ export async function loginAction(
       return { success: false, error: 'Invalid username or password.' };
     }
 
-    const isPasswordValid = password === user.passwordHash;
+    const isPasswordValid = password === user.passwordHash; // In a real app, use bcrypt.compareSync(password, user.passwordHash);
 
     if (isPasswordValid) {
       console.log(`loginAction: Database user '${username}' login SUCCESSFUL.`);
@@ -221,7 +221,7 @@ export async function getSession(): Promise<UserSession | null> {
     return null;
   }
   
-  if (sessionCookieValue === 'undefined') {
+  if (sessionCookieValue === 'undefined') { // Check for the literal string 'undefined'
      console.warn(`CRITICAL_SESSION_ERROR: Session cookie ${SESSION_COOKIE_NAME} had the literal string 'undefined'. This indicates a serious problem. Clearing problematic cookie.`);
      await cookieStore.delete(SESSION_COOKIE_NAME);
      return null;
@@ -230,15 +230,22 @@ export async function getSession(): Promise<UserSession | null> {
   console.log(`getSession: Raw cookie value for ${SESSION_COOKIE_NAME}: '${sessionCookieValue}'`);
 
   const runtimeEnvAdminUsername = process.env.ADMIN_USERNAME;
+  // For env_admin, we also need to check process.env.ADMIN_PASSWORD to ensure it's still configured server-side
+  const runtimeEnvAdminPasswordSet = !!process.env.ADMIN_PASSWORD;
+
 
   if (sessionCookieValue === "superadmin_env_session") {
     console.log("getSession: Found 'superadmin_env_session' cookie.");
-    if (!runtimeEnvAdminUsername) {
-        console.warn(`CRITICAL_SESSION_FAILURE: 'superadmin_env_session' cookie found, but server has no ADMIN_USERNAME configured in process.env AT RUNTIME. Clearing invalid cookie.`);
+    // Validate that the server still has ADMIN_USERNAME and ADMIN_PASSWORD configured
+    console.log(`getSession: For 'superadmin_env_session' check - Runtime process.env.ADMIN_USERNAME: '${runtimeEnvAdminUsername}'`);
+    console.log(`getSession: For 'superadmin_env_session' check - Runtime process.env.ADMIN_PASSWORD is ${runtimeEnvAdminPasswordSet ? 'SET' : 'NOT SET'}`);
+
+    if (!runtimeEnvAdminUsername || !runtimeEnvAdminPasswordSet) {
+        console.warn(`CRITICAL_SESSION_FAILURE: 'superadmin_env_session' cookie found, but server has no ADMIN_USERNAME or ADMIN_PASSWORD configured in process.env AT RUNTIME. Clearing invalid cookie.`);
         await cookieStore.delete(SESSION_COOKIE_NAME);
         return null;
     }
-    console.log('getSession: 'superadmin_env_session' validated successfully. Granting SuperAdmin (ENV) permissions.');
+    console.log("getSession: 'superadmin_env_session' validated successfully. Granting SuperAdmin (ENV) permissions.");
     const allPermissions: Permission[] = [
       'manage_articles', 'publish_articles', 'manage_users', 'manage_roles',
       'manage_layout_gadgets', 'manage_seo_global', 'manage_settings', 'view_admin_dashboard'
@@ -282,8 +289,6 @@ export async function getSession(): Promise<UserSession | null> {
     }
   }
 
-  // If cookie value is not "superadmin_env_session" and doesn't start with "user:", it's an unknown/invalid format.
-  // This also covers the old "env_admin:username" format which is now deprecated by "superadmin_env_session".
   console.warn(`getSession: Cookie value '${sessionCookieValue}' does not match known session formats ('superadmin_env_session' or 'user:'). Clearing potentially invalid cookie.`);
   await cookieStore.delete(SESSION_COOKIE_NAME);
   return null;

@@ -33,7 +33,8 @@ import {
   getTopUserPostActivity
 } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
-import AnalyticsCard from "@/components/admin/AnalyticsCard"; 
+import AnalyticsCard from "@/components/admin/AnalyticsCard";
+import ErrorBoundary from "@/components/ErrorBoundary"; // Import the ErrorBoundary
 
 const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
@@ -144,9 +145,6 @@ export default function DashboardPage() {
         setPageError("An unexpected error occurred during initial page load. Check console and server logs.");
       })
       .finally(() => {
-        // Ensure loading states are false even if one promise rejects and another resolves
-        // setIsLoading(false); // Handled by fetchArticles
-        // setIsAnalyticsLoading(false); // Handled by fetchDashboardData
         console.log("DashboardPage: Initial data fetch process completed (settled).");
       });
   }, [fetchDashboardData, fetchArticles]);
@@ -258,199 +256,220 @@ export default function DashboardPage() {
     }
   };
   
-  // This condition now prioritizes showing the error card if pageError is set.
-  if (pageError || isLoading || isAnalyticsLoading) {
+  const DashboardContent = () => {
+    if (pageError || isLoading || isAnalyticsLoading) {
+      return (
+        <div className="container mx-auto py-8">
+          {pageError && <ErrorExplanationCard />}
+          {(isLoading || isAnalyticsLoading) && !pageError && (
+            <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="ml-4 text-lg text-muted-foreground">Loading dashboard data...</p>
+            </div>
+          )}
+           {pageError && !isLoading && !isAnalyticsLoading && (
+             <p className="text-center text-destructive mt-8">
+               Dashboard could not be fully loaded due to the error mentioned above.
+             </p>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="container mx-auto py-8">
-        <ErrorExplanationCard />
-        {(isLoading || isAnalyticsLoading) && !pageError && (
-          <div className="flex items-center justify-center min-h-[calc(100vh-20rem)]">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg text-muted-foreground">Loading dashboard data...</p>
-          </div>
-        )}
-         {pageError && !isLoading && !isAnalyticsLoading && (
-           <p className="text-center text-destructive mt-8">
-             Dashboard could not be fully loaded due to the error mentioned above.
-           </p>
-        )}
-      </div>
-    );
-  }
-
-  // If we reach here, isLoading and isAnalyticsLoading are false, and pageError is null.
-  return (
-    <div className="container mx-auto py-8">
-      {/* Error card is handled by the loading/error state above, but keep for rare cases if needed */}
-      {/* <ErrorExplanationCard /> */}
-      
-      <Card className="shadow-lg rounded-xl mb-8">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
-            <BarChartBig /> Site Overview
-          </CardTitle>
-          <CardDescription>A quick look at your site's key metrics.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {analytics ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <AnalyticsCard title="Total Articles" value={analytics.totalArticles.toString()} icon={FileText} />
-              <AnalyticsCard title="Articles Today" value={analytics.articlesToday.toString()} icon={CalendarClock} />
-              <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
-              <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
-              
-              <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
-              <AnalyticsCard title="Active Visitors Now" value={analytics.visitorStats?.activeNow?.toString() ?? "N/A"} icon={Activity} description="Requires tracking setup" />
-              <AnalyticsCard title="Visitors This Week" value={analytics.visitorStats?.thisWeek?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
-              <AnalyticsCard title="Visitors This Month" value={analytics.visitorStats?.thisMonth?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
-
-            </div>
-          ) : (
-             <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-          )}
-        </CardContent>
-      </Card>
-      
-      {topUsersActivity.length > 0 && (
         <Card className="shadow-lg rounded-xl mb-8">
-            <CardHeader>
-                <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
-                    <Users /> Top User Activity
-                </CardTitle>
-                <CardDescription>Most active users by post count (requires authorId tracking on articles).</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Username</TableHead>
-                            <TableHead>Posts Today</TableHead>
-                            <TableHead>Posts This Week</TableHead>
-                            <TableHead>Posts This Month</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {topUsersActivity.map(user => (
-                            <TableRow key={user.userId}>
-                                <TableCell>{user.username}</TableCell>
-                                <TableCell>{user.postsToday}</TableCell>
-                                <TableCell>{user.postsThisWeek}</TableCell>
-                                <TableCell>{user.postsThisMonth}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-                 <p className="text-xs text-muted-foreground mt-2">Note: User post activity relies on articles being associated with authors (authorId).</p>
-            </CardContent>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
+              <BarChartBig /> Site Overview
+            </CardTitle>
+            <CardDescription>A quick look at your site's key metrics.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {analytics ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <AnalyticsCard title="Total Articles" value={analytics.totalArticles.toString()} icon={FileText} />
+                <AnalyticsCard title="Articles Today" value={analytics.articlesToday.toString()} icon={CalendarClock} />
+                <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
+                <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
+                
+                <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+                <AnalyticsCard title="Active Visitors Now" value={analytics.visitorStats?.activeNow?.toString() ?? "N/A"} icon={Activity} description="Requires tracking setup" />
+                <AnalyticsCard title="Visitors This Week" value={analytics.visitorStats?.thisWeek?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+                <AnalyticsCard title="Visitors This Month" value={analytics.visitorStats?.thisMonth?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
+              </div>
+            ) : (
+               <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            )}
+          </CardContent>
         </Card>
-      )}
+        
+        {topUsersActivity.length > 0 && (
+          <Card className="shadow-lg rounded-xl mb-8">
+              <CardHeader>
+                  <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
+                      <Users /> Top User Activity
+                  </CardTitle>
+                  <CardDescription>Most active users by post count (requires authorId tracking on articles).</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Username</TableHead>
+                              <TableHead>Posts Today</TableHead>
+                              <TableHead>Posts This Week</TableHead>
+                              <TableHead>Posts This Month</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {topUsersActivity.map(user => (
+                              <TableRow key={user.userId}>
+                                  <TableCell>{user.username}</TableCell>
+                                  <TableCell>{user.postsToday}</TableCell>
+                                  <TableCell>{user.postsThisWeek}</TableCell>
+                                  <TableCell>{user.postsThisMonth}</TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+                   <p className="text-xs text-muted-foreground mt-2">Note: User post activity relies on articles being associated with authors (authorId).</p>
+              </CardContent>
+          </Card>
+        )}
 
-      <Card className="shadow-lg rounded-xl">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl font-bold text-primary">Manage News Articles</CardTitle>
-            <CardDescription>Add, edit, or delete news articles.</CardDescription>
-          </div>
-          <Button onClick={handleAddArticle} size="sm" className="ml-auto gap-1">
-            <PlusCircle className="h-4 w-4" />
-            Add New Article
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {articles.length === 0 && !isLoading ? ( 
-            <p className="text-center text-muted-foreground py-10">No articles found. Add one to get started!</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40%]">Title</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Published Date</TableHead>
-                  <TableHead className="text-right w-[150px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {articles.map((article) => (
-                  <TableRow key={article.id}>
-                    <TableCell className="font-medium">{article.title}</TableCell>
-                    <TableCell>{article.category}</TableCell>
-                    <TableCell>{article.publishedDate ? formatInTimeZone(new Date(article.publishedDate), DHAKA_TIMEZONE, "MMM d, yyyy, h:mm a zzz") : 'N/A'}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditArticle(article)} className="mr-2 hover:text-primary">
-                        <Edit className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteArticle(article)} className="hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                         <span className="sr-only">Delete</span>
-                      </Button>
-                    </TableCell>
+        <Card className="shadow-lg rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl font-bold text-primary">Manage News Articles</CardTitle>
+              <CardDescription>Add, edit, or delete news articles.</CardDescription>
+            </div>
+            <Button onClick={handleAddArticle} size="sm" className="ml-auto gap-1">
+              <PlusCircle className="h-4 w-4" />
+              Add New Article
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {articles.length === 0 && !isLoading ? ( 
+              <p className="text-center text-muted-foreground py-10">No articles found. Add one to get started!</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Title</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Published Date</TableHead>
+                    <TableHead className="text-right w-[150px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {articles.map((article) => (
+                    <TableRow key={article.id}>
+                      <TableCell className="font-medium">{article.title}</TableCell>
+                      <TableCell>{article.category}</TableCell>
+                      <TableCell>{article.publishedDate ? formatInTimeZone(new Date(article.publishedDate), DHAKA_TIMEZONE, "MMM d, yyyy, h:mm a zzz") : 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditArticle(article)} className="mr-2 hover:text-primary">
+                          <Edit className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteArticle(article)} className="hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                           <span className="sr-only">Delete</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
 
-      <Dialog open={isAddEditDialogOpen} onOpenChange={(isOpen) => {
-          if (!isOpen) {
-              setIsAddEditDialogOpen(false);
-              setEditingArticle(null);
-          } else {
-              setIsAddEditDialogOpen(true);
-          }
-      }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingArticle ? "Edit Article" : "Add New Article"}</DialogTitle>
-            <DialogDescription>
-              {editingArticle ? "Modify the details of the existing article." : "Fill in the details to create a new news article."}
-            </DialogDescription>
-          </DialogHeader>
-          {isAddEditDialogOpen && (
-            <ArticleForm
-              article={editingArticle}
-              onSubmit={handleFormSubmit}
-              onCancel={() => {
-                  setIsAddEditDialogOpen(false);
-                  setEditingArticle(null);
-              }}
-              isSubmitting={isSubmitting}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+        <Dialog open={isAddEditDialogOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+                setIsAddEditDialogOpen(false);
+                setEditingArticle(null);
+            } else {
+                setIsAddEditDialogOpen(true);
+            }
+        }}>
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{editingArticle ? "Edit Article" : "Add New Article"}</DialogTitle>
+              <DialogDescription>
+                {editingArticle ? "Modify the details of the existing article." : "Fill in the details to create a new news article."}
+              </DialogDescription>
+            </DialogHeader>
+            {isAddEditDialogOpen && (
+              <ArticleForm
+                article={editingArticle}
+                onSubmit={handleFormSubmit}
+                onCancel={() => {
+                    setIsAddEditDialogOpen(false);
+                    setEditingArticle(null);
+                }}
+                isSubmitting={isSubmitting}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
-      <Dialog open={isDeleteDialogOpen} onOpenChange={(isOpen) => {
-          if (!isOpen) {
-              setIsDeleteDialogOpen(false);
-              setArticleToDelete(null);
-          } else {
-               setIsDeleteDialogOpen(true);
-          }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the article &amp;quot;{articleToDelete?.title}&amp;quot;? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => {
+        <Dialog open={isDeleteDialogOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) {
                 setIsDeleteDialogOpen(false);
                 setArticleToDelete(null);
-            }} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={confirmDeleteArticle} disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            } else {
+                 setIsDeleteDialogOpen(true);
+            }
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete the article &amp;quot;{articleToDelete?.title}&amp;quot;? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="sm:justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                  setIsDeleteDialogOpen(false);
+                  setArticleToDelete(null);
+              }} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button type="button" variant="destructive" onClick={confirmDeleteArticle} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  };
+
+  return (
+    <ErrorBoundary 
+      fallback={
+        <div className="container mx-auto p-4 py-8 text-center">
+          <Card className="w-full max-w-md mx-auto shadow-lg border-destructive">
+            <CardHeader className="bg-destructive/10">
+              <CardTitle className="text-xl text-destructive flex items-center justify-center">
+                <AlertTriangle className="mr-2 h-6 w-6" />
+                Dashboard Error
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <p className="text-muted-foreground">
+                The dashboard encountered an error and could not be loaded. Please try reloading the page.
+                If the problem persists, check the browser console for more details or contact support.
+              </p>
+              <Button className="mt-4" onClick={() => window.location.reload()}>Reload Page</Button>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <DashboardContent />
+    </ErrorBoundary>
   );
 }
