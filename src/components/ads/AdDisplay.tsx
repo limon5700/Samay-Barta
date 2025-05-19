@@ -14,8 +14,13 @@ export default function AdDisplay({ gadget, className }: AdDisplayProps) {
   const adContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // This effect executes scripts within the gadget content
-    // This is generally UNSAFE if the content is not trusted.
+    // This effect executes scripts within the gadget content.
+    // Be aware that arbitrary HTML/JS from gadgets can attempt to use browser APIs.
+    // If a gadget tries to perform a restricted action (like writing to the clipboard
+    // without user permission or proper document policies), the browser will block it
+    // and may log errors to the console (e.g., Clipboard API errors, CORS errors
+    // if the gadget tries to fetch external resources without proper headers).
+    // Such errors originate from the gadget's content, not AdDisplay.tsx itself.
     if (gadget.content && adContainerRef.current) {
       const container = adContainerRef.current;
       // Clear previous content before inserting new
@@ -25,16 +30,14 @@ export default function AdDisplay({ gadget, className }: AdDisplayProps) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = gadget.content; // Assign the gadget's HTML/JS content
 
-      // Find all script tags within the parsed content
-      const scripts = Array.from(tempDiv.querySelectorAll("script"));
-
       // Append all nodes (including non-script elements) from tempDiv to the actual container
+      // This ensures HTML structure is rendered.
       while (tempDiv.firstChild) {
         container.appendChild(tempDiv.firstChild);
       }
 
-
       // Find the scripts *within the actual container* now and execute them
+      // This is necessary because scripts inserted via innerHTML might not execute automatically or correctly.
       const scriptsInContainer = Array.from(container.querySelectorAll("script"));
       scriptsInContainer.forEach(oldScript => {
         const newScript = document.createElement("script");
@@ -51,7 +54,8 @@ export default function AdDisplay({ gadget, className }: AdDisplayProps) {
          if (oldScript.parentNode) {
             oldScript.parentNode.replaceChild(newScript, oldScript);
          } else {
-            console.warn("Script's parentNode is null, cannot replace to execute:", oldScript);
+            // This case should ideally not happen if scripts are correctly appended within the container.
+            // console.warn("Script's parentNode is null, cannot replace to execute:", oldScript);
          }
       });
     }
@@ -72,9 +76,11 @@ export default function AdDisplay({ gadget, className }: AdDisplayProps) {
   return (
     <div
       ref={adContainerRef}
-      className={`gadget-container section-${gadget.section} ${className}`}
+      className={`gadget-container section-${gadget.section || 'unknown'} ${className || ''}`}
       data-gadget-id={gadget.id}
       // Avoid dangerouslySetInnerHTML for script execution; handled by useEffect
     />
   );
 }
+
+    
