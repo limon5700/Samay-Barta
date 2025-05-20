@@ -3,13 +3,15 @@
 
 import { cookies as nextCookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import type { LoginFormData } from '@/lib/types'; // UserSession removed as getSession is simplified
+import type { LoginFormData } from '@/lib/types';
 import { SESSION_COOKIE_NAME, SUPERADMIN_COOKIE_VALUE } from '@/lib/auth-constants';
+// User/Role database functions are removed as User Role system is removed.
+// import { getUserByUsername, User } from '@/lib/data';
+// import bcrypt from 'bcryptjs'; // bcrypt would be needed if storing hashed passwords for DB users
 
-// Helper function to check critical environment variables needed for login
+// Helper function to check critical environment variables needed for .env admin login
 async function checkLoginRequiredEnvVars(): Promise<{ error?: string }> {
-  console.log("checkLoginRequiredEnvVars: Checking server environment variables for login...");
-  // MONGODB_URI check is removed as it's not strictly needed for .env admin login itself
+  console.log("checkLoginRequiredEnvVars: Checking server environment variables for .env admin login...");
   const ADMIN_USERNAME_IS_SET = !!process.env.ADMIN_USERNAME;
   const ADMIN_PASSWORD_IS_SET = !!process.env.ADMIN_PASSWORD;
 
@@ -32,6 +34,7 @@ export async function loginAction(formData: LoginFormData): Promise<{ success: b
   console.log("loginAction: Invoked. ABOUT TO CHECK LOGIN ENV VARS.");
   const envCheckResult = await checkLoginRequiredEnvVars();
   if (envCheckResult.error) {
+    // This error will be caught by the login page and displayed
     return { success: false, error: envCheckResult.error };
   }
 
@@ -40,30 +43,29 @@ export async function loginAction(formData: LoginFormData): Promise<{ success: b
   const currentRuntimeAdminPassword = process.env.ADMIN_PASSWORD;
 
   console.log(`loginAction: Runtime process.env.ADMIN_USERNAME: '${currentRuntimeAdminUsername}'`);
-  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? 'set' : 'NOT SET'}`);
+  console.log(`loginAction: Runtime process.env.ADMIN_PASSWORD is ${currentRuntimeAdminPassword ? "SET" : "NOT SET"}`);
   console.log(`loginAction: Attempting login for username: '${username}'`);
 
   try {
-    if (username === currentRuntimeAdminUsername) {
-      if (password === currentRuntimeAdminPassword) {
-        console.log("loginAction: Admin login via .env credentials SUCCESSFUL for username:", currentRuntimeAdminUsername);
-        const cookieStore = await nextCookies();
-        console.log(`loginAction: About to set cookie '${SESSION_COOKIE_NAME}' to '${SUPERADMIN_COOKIE_VALUE}'`);
-        await cookieStore.set(SESSION_COOKIE_NAME, SUPERADMIN_COOKIE_VALUE, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          path: '/',
-          sameSite: 'lax',
-          // Session cookie (expires when browser closes)
-        });
-        console.log(`loginAction: Cookie for ${SUPERADMIN_COOKIE_VALUE} should be set. Attempting redirect to /admin/dashboard.`);
-        redirect('/admin/dashboard'); // This will throw NEXT_REDIRECT
-      } else {
-        console.log("loginAction: Admin login via .env credentials FAILED - password mismatch for username:", currentRuntimeAdminUsername);
-        return { success: false, error: "Invalid admin username or password." };
-      }
+    if (username === currentRuntimeAdminUsername && password === currentRuntimeAdminPassword) {
+      console.log("loginAction: Admin login via .env credentials SUCCESSFUL for username:", currentRuntimeAdminUsername);
+      const cookieStore = await nextCookies();
+      console.log(`loginAction: About to set cookie '${SESSION_COOKIE_NAME}' to '${SUPERADMIN_COOKIE_VALUE}'`);
+      await cookieStore.set(SESSION_COOKIE_NAME, SUPERADMIN_COOKIE_VALUE, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+      console.log(`loginAction: Cookie for ${SUPERADMIN_COOKIE_VALUE} should be set. Attempting redirect to /admin/dashboard.`);
+      redirect('/admin/dashboard'); // This will throw NEXT_REDIRECT
     } else {
-      console.log("loginAction: Username did not match .env admin. No other user types implemented.");
+      // This path handles cases where:
+      // 1. Username doesn't match .env admin username.
+      // 2. Username matches, but password for .env admin is incorrect.
+      console.log("loginAction: .env admin credentials did not match or username was not the .env admin username.");
+      // Since User Role system is removed, there are no other users to check against.
       return { success: false, error: "Invalid username or password." };
     }
   } catch (error: any) {
@@ -85,48 +87,55 @@ export async function logoutAction() {
     console.log("logoutAction: Session cookie deleted.");
   } catch (error) {
     console.error("logoutAction: Error deleting cookie:", error);
-    // Still attempt to redirect
   }
   redirect('/admin/login');
 }
 
-// getSession is simplified and NOT called by AdminLayout or Middleware for the primary SuperAdmin auth flow.
-// It's kept for potential future use if a specific page component needs to verify SuperAdmin status.
-export async function getSession(): Promise<{ isAuthenticated: boolean; username?: string; isSuperAdmin?: boolean } | null> {
-  console.log("getSession: Invoked (NOT part of primary SuperAdmin nav auth flow).");
+// getSession is simplified and primarily for the middleware to quickly check SuperAdmin.
+// It's not used by AdminLayout for rendering nav links anymore.
+export async function getSession(): Promise<{ isAuthenticated: boolean; isSuperAdmin?: boolean } | null> {
+  console.log("getSession: Invoked (simplified for middleware or specific page checks).");
   
+  // Check server configuration for .env admin.
   const serverAdminUsername = process.env.ADMIN_USERNAME;
   if (!serverAdminUsername) {
-      console.warn("getSession: ADMIN_USERNAME is not set on the server. Cannot validate SuperAdmin session if called.");
-      // No cookie deletion here, as the server itself is misconfigured for this check.
-      return null;
+      console.warn("getSession: CRITICAL SERVER MISCONFIGURATION - ADMIN_USERNAME is not set on the server. Cannot validate SuperAdmin session.");
+      return null; // Cannot validate any session if server isn't configured for superadmin
   }
 
   const cookieStore = await nextCookies();
   const sessionCookie = await cookieStore.get(SESSION_COOKIE_NAME);
   const sessionCookieValue = sessionCookie?.value;
   
-  console.log(`getSession: Value of sessionCookie?.value upon read: '${sessionCookieValue}' (Type: ${typeof sessionCookieValue})`);
+  console.log(`getSession: Value of sessionCookie '${SESSION_COOKIE_NAME}' upon read: '${sessionCookieValue}' (Type: ${typeof sessionCookieValue})`);
 
   if (!sessionCookieValue) {
-    const allCookies = await cookieStore.getAll(); // Get all cookies from the NextRequest for logging
-    console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME}. DEBUG - All cookies present when ${SESSION_COOKIE_NAME} was not found:`, JSON.stringify(allCookies));
+    const allCookies = await cookieStore.getAll();
+    console.log(`getSession: No session cookie found for ${SESSION_COOKIE_NAME}. DEBUG - All cookies present:`, JSON.stringify(allCookies));
     return null;
   }
 
   if (sessionCookieValue === SUPERADMIN_COOKIE_VALUE) {
-    console.log("getSession: Found SUPERADMIN_COOKIE_VALUE. Server ADMIN_USERNAME is set. User is SuperAdmin.");
-    return {
-        isAuthenticated: true,
-        username: serverAdminUsername,
-        isSuperAdmin: true,
-    };
+    // This is the SuperAdmin logged in via .env credentials.
+    // A quick sanity check that the server still has ADMIN_USERNAME configured.
+    if (process.env.ADMIN_USERNAME) {
+        console.log("getSession: Valid SUPERADMIN_COOKIE_VALUE found and server ADMIN_USERNAME is set. User is SuperAdmin.");
+        return {
+            isAuthenticated: true,
+            isSuperAdmin: true,
+        };
+    } else {
+        // This case should ideally not happen if the check at the start of getSession passes.
+        // But it's a failsafe: if the cookie is superadmin, but server lost its config, invalidate.
+        console.warn("getSession: SUPERADMIN_COOKIE_VALUE found, but server ADMIN_USERNAME is now missing. Invalidating session.");
+        await cookieStore.delete(SESSION_COOKIE_NAME);
+        return null;
+    }
   }
   
-  console.log(`getSession: Cookie value '${sessionCookieValue}' is not SUPERADMIN_COOKIE_VALUE. No other session types handled by this simplified getSession.`);
-  // If the cookie exists but is not the SUPERADMIN_COOKIE_VALUE, it's invalid for this simplified check.
-  // We might not want to delete it if it's for another purpose, but for SuperAdmin auth, it's not valid.
-  // For robustness, if a specific page calls getSession and gets a non-superadmin cookie, it should treat as unauth.
+  // Since User Role system is removed, there are no other session types (like database user sessions) to validate.
+  console.log(`getSession: Cookie value '${sessionCookieValue}' is not '${SUPERADMIN_COOKIE_VALUE}'. No other session types handled. Invalidating.`);
+  await cookieStore.delete(SESSION_COOKIE_NAME); // Clear any unrecognized cookie
   return null;
 }
 

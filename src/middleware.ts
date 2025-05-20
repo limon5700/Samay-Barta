@@ -29,7 +29,8 @@ export async function middleware(request: NextRequest) {
     const sessionCookieValue = sessionCookie?.value;
     console.log(`[Middleware] Value of '${SESSION_COOKIE_NAME}' from cookieStore.get(): '${sessionCookieValue}'`);
 
-    // Critical: Check if the server is even configured for SuperAdmin login
+    // Critical: Check if the server is even configured for SuperAdmin login.
+    // This check is vital because if ADMIN_USERNAME isn't set, any "superadmin_env_session" cookie is meaningless.
     const serverAdminUsername = process.env.ADMIN_USERNAME;
     if (!serverAdminUsername) {
         console.warn("[Middleware] CRITICAL SERVER MISCONFIGURATION: ADMIN_USERNAME is NOT SET on the server. SuperAdmin session cannot be validated. Redirecting to login with error.");
@@ -38,6 +39,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
+    // Check if the cookie has the specific value for a SuperAdmin session
+    // and that the server is configured for such an admin.
     if (sessionCookieValue === SUPERADMIN_COOKIE_VALUE) {
         // The cookie has the correct value for a SuperAdmin session.
         // The serverAdminUsername check above ensures the server is minimally configured.
@@ -53,7 +56,9 @@ export async function middleware(request: NextRequest) {
         // If a cookie exists but is not the superadmin one (e.g., old or malformed)
         loginUrl.searchParams.set('error', encodeURIComponent('Your session is invalid. Please log in again.'));
     } else if (!sessionCookieValue) {
-        loginUrl.searchParams.set('error', encodeURIComponent('Your session has expired or is missing. Please log in.'));
+        // If no session cookie at all
+        // loginUrl.searchParams.set('error', encodeURIComponent('Your session has expired or is missing. Please log in.'));
+        // No error query param here, as it's the default state for an unauthenticated user trying to access a protected route.
     }
     return NextResponse.redirect(loginUrl);
   }

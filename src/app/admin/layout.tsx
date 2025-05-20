@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let headersAvailable = false;
 
   try {
-    const headersList = await nextHeaders(); // Ensure await for TypeScript if needed
+    const headersList = await nextHeaders(); 
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlPath = headersList.get('next-url');
 
@@ -32,9 +32,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         actualPathname = url.pathname.trim();
         headersAvailable = true;
       } catch (e) {
-        console.warn("AdminLayout: Error parsing next-url header. Defaulting actualPathname. Error:", e);
-        // If parsing fails, default to a non-login path to show nav, middleware handles protection.
-        actualPathname = '/admin/dashboard'; 
+        console.warn("AdminLayout: Error parsing next-url header. Defaulting actualPathname to a non-login path to show nav. Error:", e);
+        actualPathname = '/admin/dashboard'; // Default to a non-login path
       }
     }
 
@@ -49,9 +48,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
 
+  // Hide admin navigation only if on the login page.
   if (actualPathname === '/admin/login') {
     showAdminNav = false;
   }
+  // For any other admin path, or if path determination was problematic (defaulted to /admin/dashboard), showAdminNav remains true.
+  // The middleware is responsible for protecting these routes if the user is not authenticated.
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">

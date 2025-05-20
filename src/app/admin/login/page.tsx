@@ -57,12 +57,12 @@ export default function LoginPage() {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
-    setServerConfigError(null);
+    setServerConfigError(null); // Clear previous server config errors on new attempt
     console.log("LoginPage: handleSubmit invoked for user:", formData.username);
 
     try {
       // loginAction will throw NEXT_REDIRECT on success if using redirect() from next/navigation
-      const result = await loginAction(formData);
+      const result = await loginAction(formData); 
       
       // This part should ideally not be reached if redirect() in loginAction works,
       // as it throws NEXT_REDIRECT. If it is reached, it means loginAction
@@ -74,13 +74,21 @@ export default function LoginPage() {
         setError(result.error);
       } else if (result && result.success) {
         // This is an unexpected state if loginAction is supposed to redirect server-side.
-        console.warn("LoginPage: loginAction returned success but did not throw NEXT_REDIRECT. This is unexpected.");
-        setError("Login successful, but redirection signal was missing from server. Please try again or check server logs.");
+        console.warn("LoginPage: loginAction returned success but did not throw NEXT_REDIRECT. This is unexpected if redirect() was called.");
+        // Attempt client-side redirect as a fallback if server redirect signal wasn't caught
+        if (result.redirectPath) {
+            console.log("LoginPage: Fallback client-side redirect to:", result.redirectPath);
+            router.push(result.redirectPath);
+            // Return here to prevent setIsLoading(false) if redirecting
+            return; 
+        } else {
+            setError("Login successful, but redirection path was missing from server. Please try again or check server logs.");
+        }
       } else if (!result) {
         console.error("LoginPage: loginAction returned no result. This might indicate a server-side crash before returning.");
         setError("Login failed due to a server communication issue. Please check server logs or try again later.");
       }
-      setIsLoading(false); // Set loading to false only if not redirected
+      setIsLoading(false); // Set loading to false only if not redirected by NEXT_REDIRECT
 
     } catch (err: any) {
       console.log("LoginPage: handleSubmit caught an error object:", err);
@@ -92,12 +100,12 @@ export default function LoginPage() {
 
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
         console.log("LoginPage: NEXT_REDIRECT signal caught (digest: " + err.digest + "). Navigation should be handled by Next.js. No client-side error to display.");
-        // Next.js handles the redirect, no client-side action (like setError or setIsLoading(false)) needed here
-        // as the component might unmount.
+        // Next.js handles the redirect, no client-side action (like setError) needed here
+        // as the component might unmount. Do NOT call setIsLoading(false) here.
         return; 
       } else {
         const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during login.";
-        setError(`Login attempt failed: ${errorMessage}`);
+        setError(`Login attempt failed: ${errorMessage}. Check server logs for more details.`);
         setIsLoading(false);
       }
     } 
