@@ -28,6 +28,10 @@ export default function LoginPage() {
     if (configErrorParam) {
         setServerConfigError(decodeURIComponent(configErrorParam));
     }
+    const generalErrorParam = searchParams.get('error');
+     if (generalErrorParam) {
+        setError(decodeURIComponent(generalErrorParam));
+    }
   }, [searchParams]);
 
   const handleCheckServerVars = async () => {
@@ -53,32 +57,30 @@ export default function LoginPage() {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
-    setServerConfigError(null); // Clear server config error on new login attempt
+    setServerConfigError(null);
     console.log("LoginPage: handleSubmit invoked for user:", formData.username);
 
     try {
-      // loginAction will throw NEXT_REDIRECT on success, which is handled by Next.js
-      // If it returns, it means there was an error or it's an unexpected flow.
+      // loginAction will throw NEXT_REDIRECT on success if using redirect() from next/navigation
       const result = await loginAction(formData);
       
-      console.log("LoginPage: loginAction raw result:", result);
+      // This part should ideally not be reached if redirect() in loginAction works,
+      // as it throws NEXT_REDIRECT. If it is reached, it means loginAction
+      // returned an object, indicating a failure or an unexpected flow.
+      console.log("LoginPage: loginAction result (if it didn't throw NEXT_REDIRECT):", result);
 
       if (result && !result.success && result.error) {
         console.error("LoginPage: loginAction returned error:", result.error);
         setError(result.error);
-      } else if (result && result.success && !result.redirectPath) {
-        // This case indicates an issue if loginAction is supposed to redirect via NEXT_REDIRECT
-        // but instead returns a success object without a path.
-        console.warn("LoginPage: loginAction returned success but no redirectPath and didn't throw NEXT_REDIRECT.");
-        setError("Login successful, but redirection signal was missing. Please try again or check server logs.");
+      } else if (result && result.success) {
+        // This is an unexpected state if loginAction is supposed to redirect server-side.
+        console.warn("LoginPage: loginAction returned success but did not throw NEXT_REDIRECT. This is unexpected.");
+        setError("Login successful, but redirection signal was missing from server. Please try again or check server logs.");
       } else if (!result) {
-        // This case indicates a more severe server-side issue where action didn't return.
-        console.error("LoginPage: loginAction returned no result. This indicates a server-side crash or communication failure.");
+        console.error("LoginPage: loginAction returned no result. This might indicate a server-side crash before returning.");
         setError("Login failed due to a server communication issue. Please check server logs or try again later.");
       }
-      // If loginAction throws NEXT_REDIRECT, it will be caught below.
-      // If it doesn't throw and doesn't return success, it implies an error handled above.
-      setIsLoading(false);
+      setIsLoading(false); // Set loading to false only if not redirected
 
     } catch (err: any) {
       console.log("LoginPage: handleSubmit caught an error object:", err);
@@ -89,13 +91,13 @@ export default function LoginPage() {
       console.log("LoginPage: Error digest (if any):", err.digest);
 
       if (err.digest?.startsWith('NEXT_REDIRECT')) {
-        console.log("LoginPage: NEXT_REDIRECT signal caught, navigation should be handled by Next.js.");
-        // Next.js handles the redirect, no client-side action needed here.
-        // setIsLoading(false) will be problematic as the component might unmount.
-        return; // Exit early as redirect is in progress
+        console.log("LoginPage: NEXT_REDIRECT signal caught (digest: " + err.digest + "). Navigation should be handled by Next.js. No client-side error to display.");
+        // Next.js handles the redirect, no client-side action (like setError or setIsLoading(false)) needed here
+        // as the component might unmount.
+        return; 
       } else {
         const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during login.";
-        setError(`Login failed: ${errorMessage}`);
+        setError(`Login attempt failed: ${errorMessage}`);
         setIsLoading(false);
       }
     } 
@@ -164,11 +166,11 @@ export default function LoginPage() {
                 <Card className="mt-4 text-sm">
                     <CardHeader><CardTitle className="text-base">Server Configuration Status:</CardTitle></CardHeader>
                     <CardContent className="space-y-1">
-                        <p><strong>MONGODB_URI is set:</strong> {serverVars.MONGODB_URI_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (CRITICAL)</span>}</p>
-                        <p><strong>ADMIN_USERNAME is set:</strong> {serverVars.ADMIN_USERNAME_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (CRITICAL)</span>}</p>
+                        <p><strong>MONGODB_URI is set:</strong> {serverVars.MONGODB_URI_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (Required for general app stability)</span>}</p>
+                        <p><strong>ADMIN_USERNAME is set:</strong> {serverVars.ADMIN_USERNAME_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (CRITICAL for .env admin login)</span>}</p>
                         <p><strong>ADMIN_USERNAME value:</strong> {String(serverVars.ADMIN_USERNAME_VALUE)}</p>
-                        <p><strong>ADMIN_PASSWORD is set:</strong> {serverVars.ADMIN_PASSWORD_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (CRITICAL)</span>}</p>
-                        <p><strong>GEMINI_API_KEY is set:</strong> {serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No (Optional for some features)"}</p>
+                        <p><strong>ADMIN_PASSWORD is set:</strong> {serverVars.ADMIN_PASSWORD_IS_SET ? "Yes" : <span className="text-destructive font-semibold">No (CRITICAL for .env admin login)</span>}</p>
+                        <p><strong>GEMINI_API_KEY is set:</strong> {serverVars.GEMINI_API_KEY_IS_SET ? "Yes" : "No (Optional for AI features)"}</p>
                         <p><strong>NODE_ENV:</strong> {String(serverVars.NODE_ENV)}</p>
                         <p><strong>VERCEL_ENV:</strong> {String(serverVars.VERCEL_ENV)}</p>
                     </CardContent>

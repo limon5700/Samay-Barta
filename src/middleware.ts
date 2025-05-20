@@ -8,47 +8,57 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   console.log(`[Middleware] Pathname: ${pathname}`);
 
-  // Allow requests to the login page itself and API routes/static assets
+  // Allow requests to the login page itself, API routes, and static assets
   if (pathname.startsWith('/admin/login') || 
       pathname.startsWith('/api') || 
       pathname.startsWith('/_next') || 
-      pathname.includes('.')) { // commonly for static files
-    console.log("[Middleware] Allowing request to login, API, or static asset.");
+      pathname.includes('.')) { // commonly for static files like .ico, .png
+    console.log(`[Middleware] Allowing request to login, API, or static asset: ${pathname}`);
     return NextResponse.next();
   }
 
   // Protect all other /admin/* routes
   if (pathname.startsWith('/admin')) {
-    console.log("[Middleware] Checking session for protected admin route:", pathname);
+    console.log(`[Middleware] Checking session for protected admin route: ${pathname}`);
     
     const cookieStore = cookies(); // Use synchronous cookies() from next/headers
-    const allCookies = request.cookies.getAll(); // Get all cookies from the NextRequest for logging
-    console.log(`[Middleware] All cookies received by middleware for path ${pathname}:`, JSON.stringify(allCookies));
+    const allCookiesForDebug = request.cookies.getAll(); 
+    console.log(`[Middleware] All cookies received by middleware for path ${pathname}:`, JSON.stringify(allCookiesForDebug));
 
     const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
     const sessionCookieValue = sessionCookie?.value;
-    console.log(`[Middleware] Value of ${SESSION_COOKIE_NAME} from cookieStore.get(): ${sessionCookieValue}`);
+    console.log(`[Middleware] Value of '${SESSION_COOKIE_NAME}' from cookieStore.get(): '${sessionCookieValue}'`);
+
+    // Critical: Check if the server is even configured for SuperAdmin login
+    const serverAdminUsername = process.env.ADMIN_USERNAME;
+    if (!serverAdminUsername) {
+        console.warn("[Middleware] CRITICAL SERVER MISCONFIGURATION: ADMIN_USERNAME is NOT SET on the server. SuperAdmin session cannot be validated. Redirecting to login with error.");
+        const loginUrl = new URL('/admin/login', request.url);
+        loginUrl.searchParams.set('configError', encodeURIComponent('SuperAdmin login is misconfigured on the server (ADMIN_USERNAME not set). Authentication is effectively disabled.'));
+        return NextResponse.redirect(loginUrl);
+    }
 
     if (sessionCookieValue === SUPERADMIN_COOKIE_VALUE) {
-      // Basic check: ensure server is still configured for this superadmin
-      if (process.env.ADMIN_USERNAME) {
-          console.log("[Middleware] Valid 'superadmin_env_session' cookie found and ADMIN_USERNAME is set on server. Allowing access.");
-          return NextResponse.next();
-      } else {
-          console.warn("[Middleware] 'superadmin_env_session' cookie found, but ADMIN_USERNAME IS NOT SET ON SERVER. This is a server misconfiguration. Redirecting to login with error.");
-          const loginUrl = new URL('/admin/login', request.url);
-          loginUrl.searchParams.set('configError', encodeURIComponent('SuperAdmin login is misconfigured on the server (ADMIN_USERNAME not set).'));
-          return NextResponse.redirect(loginUrl);
-      }
+        // The cookie has the correct value for a SuperAdmin session.
+        // The serverAdminUsername check above ensures the server is minimally configured.
+        console.log(`[Middleware] Valid '${SUPERADMIN_COOKIE_VALUE}' cookie found. ADMIN_USERNAME is set on server ('${serverAdminUsername}'). Allowing access to ${pathname}.`);
+        return NextResponse.next();
     }
     
-    // If no valid session cookie, redirect to login
-    console.log(`[Middleware] No valid session cookie ('${sessionCookieValue}') found for SUPERADMIN_COOKIE_VALUE. Redirecting to login for path: ${pathname}.`);
+    // If no valid session cookie matching SUPERADMIN_COOKIE_VALUE, redirect to login
+    console.log(`[Middleware] Session cookie for SuperAdmin either not found or value ('${sessionCookieValue}') does not match '${SUPERADMIN_COOKIE_VALUE}'. Redirecting to login for path: ${pathname}.`);
     const loginUrl = new URL('/admin/login', request.url);
     loginUrl.searchParams.set('redirectedFrom', pathname); 
+    if (sessionCookieValue && sessionCookieValue !== SUPERADMIN_COOKIE_VALUE) { 
+        // If a cookie exists but is not the superadmin one (e.g., old or malformed)
+        loginUrl.searchParams.set('error', encodeURIComponent('Your session is invalid. Please log in again.'));
+    } else if (!sessionCookieValue) {
+        loginUrl.searchParams.set('error', encodeURIComponent('Your session has expired or is missing. Please log in.'));
+    }
     return NextResponse.redirect(loginUrl);
   }
 
+  // For all other non-admin routes, allow access
   return NextResponse.next();
 }
 

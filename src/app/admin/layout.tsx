@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { headers as nextHeaders } from 'next/headers'; 
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, Layout as LayoutIcon, BarChart3, Settings, LogOut } from 'lucide-react';
+import { Home, Newspaper, Layout as LayoutIcon, BarChart3, LogOut } from 'lucide-react';
+// Users icon removed as User Management is removed
 import { logoutAction } from '@/app/admin/auth/actions';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -14,7 +15,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   let headersAvailable = false;
 
   try {
-    const headersList = await nextHeaders(); 
+    const headersList = await nextHeaders(); // Ensure await for TypeScript if needed
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlPath = headersList.get('next-url');
 
@@ -31,17 +32,18 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         actualPathname = url.pathname.trim();
         headersAvailable = true;
       } catch (e) {
-        console.warn("AdminLayout: Error parsing next-url header. Pathname determination might be affected.", e);
-        actualPathname = '/admin/dashboard'; // Sensible default if parsing fails and headers were attempted
+        console.warn("AdminLayout: Error parsing next-url header. Defaulting actualPathname. Error:", e);
+        // If parsing fails, default to a non-login path to show nav, middleware handles protection.
+        actualPathname = '/admin/dashboard'; 
       }
     }
 
     if (!headersAvailable) {
-      console.log("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' (assuming not on login page).");
-      actualPathname = '/admin/dashboard'; // If headers are missing, assume we are in an admin page
+      console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' to ensure nav shows. Middleware handles protection.");
+      actualPathname = '/admin/dashboard'; // Sensible default if headers are missing
     }
   } catch (error: any) {
-    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav, assuming not on login page.", error);
+    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav, assuming not on login page. Error:", error);
     actualPathname = '/admin/dashboard'; 
   }
 
@@ -80,15 +82,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
             </Button>
             
-            {/* User & Role Management link is removed as per your request to remove user role system */}
-            {/* 
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/users" prefetch={false}>
-                <Users className="h-4 w-4 mr-2" />
-                User & Role Mgmt
-              </Link>
-            </Button>
-            */}
+            {/* User & Role Management link is removed */}
 
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/seo" prefetch={false}>
