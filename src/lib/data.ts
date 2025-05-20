@@ -3,7 +3,7 @@
 
 import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, DashboardAnalytics, User, Role, Permission, CreateUserData, CreateRoleData, UpdateUserData, CreateActivityLogData, ActivityLogEntry, UserActivity } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
-import { initialSampleNewsArticles, availablePermissions } from './constants'; 
+import { initialSampleNewsArticles, availablePermissions } from './constants';
 import bcrypt from 'bcryptjs';
 
 // Helper to map MongoDB document to NewsArticle type
@@ -38,9 +38,9 @@ function mapMongoDocumentToGadget(doc: any): Gadget {
   if (!doc) return null as any;
   return {
     id: doc._id.toHexString(),
-    section: doc.section || doc.placement, 
+    section: doc.section || doc.placement,
     title: doc.title,
-    content: doc.content || doc.codeSnippet, 
+    content: doc.content || doc.codeSnippet,
     isActive: doc.isActive,
     order: doc.order,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
@@ -70,8 +70,8 @@ function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
 }
 
 // Helper to map MongoDB document to User type
-function mapMongoDocumentToUser(doc: any): User {
-  if (!doc) return null as any;
+function mapMongoDocumentToUser(doc: any): User | null {
+  if (!doc) return null;
   return {
     id: doc._id.toHexString(),
     username: doc.username,
@@ -79,27 +79,27 @@ function mapMongoDocumentToUser(doc: any): User {
     passwordHash: doc.passwordHash,
     roles: doc.roles || [], // Array of role IDs
     isActive: doc.isActive,
-    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
-    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : undefined,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : undefined,
   };
 }
 
 // Helper to map MongoDB document to Role type
-function mapMongoDocumentToRole(doc: any): Role {
-  if (!doc) return null as any;
+function mapMongoDocumentToRole(doc: any): Role | null {
+  if (!doc) return null;
   return {
     id: doc._id.toHexString(),
     name: doc.name,
     description: doc.description,
     permissions: doc.permissions || [],
-    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
-    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : undefined,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : undefined,
   };
 }
 
 // Helper to map MongoDB document to ActivityLogEntry type
-function mapMongoDocumentToActivityLog(doc: any): ActivityLogEntry {
-  if (!doc) return null as any;
+function mapMongoDocumentToActivityLog(doc: any): ActivityLogEntry | null {
+  if (!doc) return null;
   return {
     id: doc._id.toHexString(),
     userId: doc.userId,
@@ -117,7 +117,7 @@ export async function getAllNewsArticles(authorId?: string): Promise<NewsArticle
   try {
     const { db } = await connectToDatabase();
     const articlesCollection = db.collection('articles');
-    
+
     const query: any = {};
     if (authorId && authorId !== 'SUPERADMIN_ENV') { // Superadmin sees all
         query.authorId = authorId;
@@ -130,7 +130,7 @@ export async function getAllNewsArticles(authorId?: string): Promise<NewsArticle
             const { id, ...restOfArticle } = article; // Exclude frontend 'id'
             return {
                 ...restOfArticle,
-                publishedDate: new Date(article.publishedDate), 
+                publishedDate: new Date(article.publishedDate),
                 inlineAdSnippets: article.inlineAdSnippets || [],
                 metaTitle: article.metaTitle || '',
                 metaDescription: article.metaDescription || '',
@@ -142,7 +142,7 @@ export async function getAllNewsArticles(authorId?: string): Promise<NewsArticle
                 articleYoutubeUrl: article.articleYoutubeUrl || '',
                 articleFacebookUrl: article.articleFacebookUrl || '',
                 articleMoreLinksUrl: article.articleMoreLinksUrl || '',
-                _id: new ObjectId(), 
+                _id: new ObjectId(),
             };
         });
         await articlesCollection.insertMany(articlesToSeed);
@@ -163,13 +163,13 @@ export async function addNewsArticle(articleData: CreateNewsArticleData): Promis
     const { db } = await connectToDatabase();
     const newArticleDocument = {
       ...articleData,
-      publishedDate: new Date(), 
-      inlineAdSnippets: articleData.inlineAdSnippets || [], 
+      publishedDate: new Date(),
+      inlineAdSnippets: articleData.inlineAdSnippets || [],
       metaKeywords: Array.isArray(articleData.metaKeywords) ? articleData.metaKeywords : (articleData.metaKeywords ? (articleData.metaKeywords as unknown as string).split(',').map(k => k.trim()).filter(k => k) : []),
       articleYoutubeUrl: articleData.articleYoutubeUrl || undefined,
       articleFacebookUrl: articleData.articleFacebookUrl || undefined,
       articleMoreLinksUrl: articleData.articleMoreLinksUrl || undefined,
-      _id: new ObjectId(), 
+      _id: new ObjectId(),
     };
     const result = await db.collection('articles').insertOne(newArticleDocument);
 
@@ -193,12 +193,12 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
   try {
     const { db } = await connectToDatabase();
     const objectId = new ObjectId(id);
-    
+
     const updateDoc: any = { ...updates };
-    delete updateDoc.publishedDate; 
+    delete updateDoc.publishedDate;
 
     if (updateDoc.inlineAdSnippets === undefined) {
-        delete updateDoc.inlineAdSnippets; 
+        delete updateDoc.inlineAdSnippets;
     } else if (!Array.isArray(updateDoc.inlineAdSnippets)) {
         updateDoc.inlineAdSnippets = [];
     }
@@ -261,7 +261,7 @@ export async function addGadget(gadgetData: CreateGadgetData): Promise<Gadget | 
       title: gadgetData.title,
       content: gadgetData.content,
       isActive: gadgetData.isActive,
-      order: gadgetData.order, 
+      order: gadgetData.order,
       createdAt: new Date(),
       _id: new ObjectId(),
     };
@@ -295,9 +295,9 @@ export async function getActiveGadgetsBySection(section: LayoutSection): Promise
   try {
     const { db } = await connectToDatabase();
     let query: any = {
-        $or: [ 
+        $or: [
             { section: section },
-            { placement: section } 
+            { placement: section }
         ],
         isActive: true
     };
@@ -322,8 +322,8 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
     const objectId = new ObjectId(id);
 
     const updateDoc: any = { ...updates };
-    delete updateDoc.createdAt; 
-    delete updateDoc.id;      
+    delete updateDoc.createdAt;
+    delete updateDoc.id;
 
     if (updateDoc.placement && !updateDoc.section) {
         updateDoc.section = updateDoc.placement;
@@ -337,7 +337,7 @@ export async function updateGadget(id: string, updates: Partial<Omit<Gadget, 'id
     delete updateDoc.imageUrl;
     delete updateDoc.linkUrl;
     delete updateDoc.altText;
-    delete updateDoc.articleId; 
+    delete updateDoc.articleId;
 
     const result = await db.collection('advertisements').findOneAndUpdate(
       { _id: objectId },
@@ -367,7 +367,7 @@ export async function deleteGadget(id: string): Promise<boolean> {
   }
 }
 
-const GLOBAL_SEO_SETTINGS_DOC_ID = "global_seo_settings_doc"; 
+const GLOBAL_SEO_SETTINGS_DOC_ID = "global_seo_settings_doc";
 
 export async function getSeoSettings(): Promise<SeoSettings | null> {
     try {
@@ -375,7 +375,7 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
         const settingsDoc = await db.collection('seo_settings').findOne({ _id: GLOBAL_SEO_SETTINGS_DOC_ID });
         if (settingsDoc) {
              return {
-                id: settingsDoc._id.toString(), 
+                id: settingsDoc._id.toString(),
                 siteTitle: settingsDoc.siteTitle,
                 metaDescription: settingsDoc.metaDescription,
                 metaKeywords: settingsDoc.metaKeywords || [],
@@ -392,7 +392,7 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
                 footerMoreLinksUrl: settingsDoc.footerMoreLinksUrl,
             };
         }
-        return {
+        return { // Default values if no settings are found
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite",
             metaDescription: "Your concise news source, powered by AI.",
@@ -403,13 +403,13 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
             ogType: "website",
             twitterCard: "summary_large_image",
             updatedAt: new Date().toISOString(),
-            footerYoutubeUrl: "https://youtube.com", 
-            footerFacebookUrl: "https://facebook.com", 
-            footerMoreLinksUrl: "#", 
+            footerYoutubeUrl: "https://youtube.com",
+            footerFacebookUrl: "https://facebook.com",
+            footerMoreLinksUrl: "#",
         };
     } catch (error) {
         console.error("Error fetching SEO settings:", error);
-        return { 
+        return { // Fallback default values on error
             id: GLOBAL_SEO_SETTINGS_DOC_ID,
             siteTitle: "Samay Barta Lite - Default",
             metaDescription: "Default description.",
@@ -439,8 +439,8 @@ export async function updateSeoSettings(settingsData: CreateSeoSettingsData): Pr
             { $set: updateDoc },
             { upsert: true, returnDocument: 'after' }
         );
-        
-        const updatedDocument = result || (result && (result as any).value);
+
+        const updatedDocument = result; // In MongoDB Node.js driver v4+, findOneAndUpdate returns the document directly
 
         if (updatedDocument) {
              return {
@@ -474,7 +474,7 @@ export async function getUsedLayoutSections(): Promise<LayoutSection[]> {
         const distinctSections = await db.collection('advertisements').distinct('section') as LayoutSection[];
         const distinctPlacements = await db.collection('advertisements').distinct('placement') as LayoutSection[];
         const allSections = [...new Set([...distinctSections, ...distinctPlacements])];
-        return allSections.filter(s => s); 
+        return allSections.filter(s => s);
     } catch (error) {
         console.error("Error fetching distinct layout sections:", error);
         return [];
@@ -489,9 +489,9 @@ export async function getArticlesStats(): Promise<{ totalArticles: number; artic
     const totalArticles = await articlesCollection.countDocuments();
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0); 
+    today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1); 
+    tomorrow.setDate(today.getDate() + 1);
 
     const articlesToday = await articlesCollection.countDocuments({
       publishedDate: {
@@ -523,7 +523,7 @@ export async function getAllUsers(): Promise<User[]> {
   try {
     const { db } = await connectToDatabase();
     const usersArray = await db.collection('users').find().toArray();
-    return usersArray.map(mapMongoDocumentToUser);
+    return usersArray.map(doc => mapMongoDocumentToUser(doc)).filter(user => user !== null) as User[];
   } catch (error) {
     console.error("Error fetching all users:", error);
     return [];
@@ -571,7 +571,6 @@ export async function addUser(userData: CreateUserData): Promise<User | null> {
         }
     }
 
-
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const newUserDocument = {
       username: userData.username,
@@ -591,7 +590,7 @@ export async function addUser(userData: CreateUserData): Promise<User | null> {
     return null;
   } catch (error) {
     console.error("Error adding user:", error);
-    throw error; // Re-throw to be caught by form handler
+    throw error;
   }
 }
 
@@ -604,7 +603,7 @@ export async function updateUser(id: string, updates: UpdateUserData): Promise<U
 
     if (updates.password) {
       updateDoc.passwordHash = await bcrypt.hash(updates.password, 10);
-      delete updateDoc.password; 
+      delete updateDoc.password;
     }
     updateDoc.updatedAt = new Date();
 
@@ -636,7 +635,7 @@ export async function getAllRoles(): Promise<Role[]> {
   try {
     const { db } = await connectToDatabase();
     const rolesArray = await db.collection('roles').find().toArray();
-    return rolesArray.map(mapMongoDocumentToRole);
+    return rolesArray.map(doc => mapMongoDocumentToRole(doc)).filter(role => role !== null) as Role[];
   } catch (error) {
     console.error("Error fetching all roles:", error);
     return [];
@@ -736,18 +735,16 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
     const articlesStats = await getArticlesStats();
     const activeGadgets = await getActiveGadgetsCount();
     const { db } = await connectToDatabase();
-    const totalUsers = await db.collection('users').countDocuments(); // Count DB users
+    const totalUsers = await db.collection('users').countDocuments();
 
-    // Visitor stats would require a separate tracking mechanism
+    // Placeholder visitor stats. A real system would require a separate tracking mechanism.
     const visitorStats = {
-      today: 0, 
-      activeNow: 0,
-      thisWeek: 0,
-      thisMonth: 0,
-      lastMonth: 0,
+      today: 123,         // Sample data
+      activeNow: 17,      // Sample data
+      thisWeek: 876,      // Sample data
+      thisMonth: 3450,    // Sample data
+      lastMonth: 4120,    // Sample data
     };
-
-    // const userPostActivity = await getTopUserPostActivity(); // Implement this if needed
 
     return {
       totalArticles: articlesStats.totalArticles,
@@ -755,17 +752,18 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
       totalUsers,
       activeGadgets,
       visitorStats,
-      // userPostActivity: Array.isArray(userPostActivity) ? userPostActivity : [],
+      // userPostActivity: Array.isArray(userPostActivity) ? userPostActivity : [], // Keep commented until fully implemented
     };
   } catch (error) {
     console.error("Error fetching dashboard analytics:", error);
+    // Return default/empty values on error
     return {
       totalArticles: 0,
       articlesToday: 0,
       totalUsers: 0,
       activeGadgets: 0,
-      visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0 },
-      userPostActivity: [],
+      visitorStats: { today: 0, activeNow: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0 },
+      // userPostActivity: [], // Keep commented until fully implemented
     };
   }
 }
@@ -782,8 +780,10 @@ export async function addActivityLogEntry(logData: CreateActivityLogData): Promi
     const result = await db.collection('activity_logs').insertOne(newLogEntry);
     if (result.acknowledged && newLogEntry._id) {
       const insertedDoc = await db.collection('activity_logs').findOne({ _id: newLogEntry._id });
-      console.log("Activity logged:", insertedDoc?.action, "by", insertedDoc?.username);
-      return mapMongoDocumentToActivityLog(insertedDoc);
+      if (insertedDoc) {
+          console.log("Activity logged:", insertedDoc.action, "by", insertedDoc.username);
+          return mapMongoDocumentToActivityLog(insertedDoc);
+      }
     }
     return null;
   } catch (error) {
@@ -795,9 +795,7 @@ export async function addActivityLogEntry(logData: CreateActivityLogData): Promi
 
 // Stub for fetching user post activity
 export async function getTopUserPostActivity(limit: number = 5): Promise<UserActivity[]> {
-    // This function would typically involve an aggregation pipeline on the 'articles' collection
-    // to count posts by 'authorId', then join with 'users' collection to get usernames.
-    // For now, returning an empty array as a placeholder.
     console.warn("getTopUserPostActivity is a stub and not fully implemented.");
     return [];
 }
+    
