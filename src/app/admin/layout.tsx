@@ -1,22 +1,20 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers'; // Keep for pathname detection
+import { headers as nextHeaders } from 'next/headers'; 
 import { Button } from '@/components/ui/button';
-import { Home, Newspaper, Layout as LayoutIcon, BarChart3, Users, Settings, LogOut } from 'lucide-react';
-import { logoutAction } from '@/app/admin/auth/actions'; // For the logout button
-
-// No getSession() call here for rendering links. Middleware handles protection.
+import { Home, Newspaper, Layout as LayoutIcon, BarChart3, Settings, LogOut } from 'lucide-react';
+import { logoutAction } from '@/app/admin/auth/actions';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   console.log("AdminLayout: Initializing...");
 
   let actualPathname = '';
-  let showAdminNav = true; // Default to true, hide only if on the login page
+  let showAdminNav = true; 
   let headersAvailable = false;
 
   try {
-    const headersList = await nextHeaders(); // Use await as TS requires
+    const headersList = await nextHeaders(); 
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlPath = headersList.get('next-url');
 
@@ -28,14 +26,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       headersAvailable = true;
     } else if (nextUrlPath && nextUrlPath !== 'null' && nextUrlPath.trim() !== '') {
       try {
-        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined; // Provide base for relative URLs
+        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined; 
         const url = new URL(nextUrlPath, base);
         actualPathname = url.pathname.trim();
         headersAvailable = true;
       } catch (e) {
         console.warn("AdminLayout: Error parsing next-url header. Pathname determination might be affected.", e);
-        // Fallback to a state that likely shows nav if parsing fails
-        actualPathname = '/admin/dashboard'; // Sensible default if parsing fails
+        actualPathname = '/admin/dashboard'; // Sensible default if parsing fails and headers were attempted
       }
     }
 
@@ -43,11 +40,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       console.log("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' (assuming not on login page).");
       actualPathname = '/admin/dashboard'; // If headers are missing, assume we are in an admin page
     }
-
   } catch (error: any) {
-    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav assuming not on login page.", error);
-    // If headers() fails, default to a state that shows nav.
-    actualPathname = '/admin/dashboard'; // Sensible default if headers fail
+    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav, assuming not on login page.", error);
+    actualPathname = '/admin/dashboard'; 
   }
 
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
