@@ -1,21 +1,21 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { headers as nextHeaders } from 'next/headers'; 
+import { headers as nextHeaders } from 'next/headers';
 import { Button } from '@/components/ui/button';
 import { Home, Newspaper, Layout as LayoutIcon, BarChart3, LogOut } from 'lucide-react';
-// Users icon removed as User Management is removed
 import { logoutAction } from '@/app/admin/auth/actions';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   console.log("AdminLayout: Initializing...");
 
   let actualPathname = '';
-  let showAdminNav = true; 
+  let showAdminNav = true; // Default to true, will be set to false if on login page
   let headersAvailable = false;
+  let errorOccurredFetchingHeaders = false;
 
   try {
-    const headersList = await nextHeaders(); 
+    const headersList = await nextHeaders(); // Ensure await is used
     const xInvokePath = headersList.get('x-invoke-path');
     const nextUrlPath = headersList.get('next-url');
 
@@ -27,23 +27,25 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       headersAvailable = true;
     } else if (nextUrlPath && nextUrlPath !== 'null' && nextUrlPath.trim() !== '') {
       try {
-        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined; 
+        // Ensure 'next-url' is a full path or can be resolved against a base
+        const base = nextUrlPath.startsWith('/') ? 'http://localhost' : undefined; // Basic base for relative paths
         const url = new URL(nextUrlPath, base);
         actualPathname = url.pathname.trim();
         headersAvailable = true;
       } catch (e) {
-        console.warn("AdminLayout: Error parsing next-url header. Defaulting actualPathname to a non-login path to show nav. Error:", e);
-        actualPathname = '/admin/dashboard'; // Default to a non-login path
+        console.warn("AdminLayout: Error parsing next-url header. Path might be ambiguous. Error:", e);
+        // If parsing fails, headersAvailable remains false
       }
     }
 
     if (!headersAvailable) {
-      console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/dashboard' to ensure nav shows. Middleware handles protection.");
-      actualPathname = '/admin/dashboard'; // Sensible default if headers are missing
+      console.warn("AdminLayout: Both 'x-invoke-path' and 'next-url' headers were missing or inconclusive. Defaulting actualPathname to '/admin/login'.");
+      actualPathname = '/admin/login'; // Default to login page path if headers are not helpful
     }
   } catch (error: any) {
-    console.error("AdminLayout: Error accessing headers. Defaulting to showing admin nav, assuming not on login page. Error:", error);
-    actualPathname = '/admin/dashboard'; 
+    console.error("AdminLayout: Error accessing or processing headers. Defaulting actualPathname to '/admin/login'. Error:", error);
+    actualPathname = '/admin/login'; // Default to login page path if any error occurs with headers
+    errorOccurredFetchingHeaders = true;
   }
 
   console.log(`AdminLayout: Final determined pathname for showAdminNav logic: ${actualPathname}`);
@@ -52,8 +54,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (actualPathname === '/admin/login') {
     showAdminNav = false;
   }
-  // For any other admin path, or if path determination was problematic (defaulted to /admin/dashboard), showAdminNav remains true.
-  // The middleware is responsible for protecting these routes if the user is not authenticated.
+  // If an error occurred fetching headers and we defaulted to /admin/login, ensure nav is hidden.
+  // This is redundant if actualPathname is already /admin/login, but explicit.
+  if (errorOccurredFetchingHeaders && actualPathname === '/admin/login') {
+    showAdminNav = false;
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -69,7 +75,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 View Site
               </Link>
             </Button>
-            
+
             <Button variant="default" size="sm" asChild>
               <Link href="/admin/dashboard" prefetch={false}>
                 <Newspaper className="h-4 w-4 mr-2" />
@@ -83,8 +89,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Layout Editor
               </Link>
             </Button>
-            
-            {/* User & Role Management link is removed */}
 
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/seo" prefetch={false}>
@@ -92,7 +96,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 SEO Management
               </Link>
             </Button>
-            
+
             <form action={logoutAction}>
               <Button type="submit" variant="destructive" size="sm">
                 <LogOut className="h-4 w-4 mr-2" />
