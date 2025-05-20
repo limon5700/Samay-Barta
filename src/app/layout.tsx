@@ -16,6 +16,11 @@ export async function generateMetadata(): Promise<Metadata> {
   
   const metadataBase = siteUrl ? new URL(siteUrl) : undefined;
 
+  const otherMetaTags: Record<string, string> = {};
+  if (process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION) {
+    otherMetaTags['google-site-verification'] = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
+  }
+
   return {
     metadataBase,
     title: {
@@ -73,6 +78,7 @@ export async function generateMetadata(): Promise<Metadata> {
       },
     },
     // manifest: `${siteUrl}/site.webmanifest`, 
+    other: otherMetaTags,
   };
 }
 
