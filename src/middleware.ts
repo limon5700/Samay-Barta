@@ -2,6 +2,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, SUPERADMIN_COOKIE_VALUE } from '@/lib/auth-constants';
+// getSession can't be used here if it relies on Node.js APIs and middleware runs on Edge.
+// Middleware will do a simpler cookie check.
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -26,7 +28,8 @@ export async function middleware(request: NextRequest) {
     console.log(`[Middleware] All cookies received by middleware for path ${pathname}:`, JSON.stringify(allCookiesForDebug));
     console.log(`[Middleware] Value of '${SESSION_COOKIE_NAME}' from request.cookies.get(): '${sessionCookieValue}'`);
 
-    // Critical: Check if the server is even configured for SuperAdmin login.
+    // Critical: Check if the server is even configured for SuperAdmin login via .env.
+    // This check uses process.env, which is available in Edge runtime if env vars are set correctly.
     const serverAdminUsername = process.env.ADMIN_USERNAME;
     if (!serverAdminUsername) {
         console.warn("[Middleware] CRITICAL SERVER MISCONFIGURATION: ADMIN_USERNAME is NOT SET on the server. SuperAdmin session cannot be validated. Redirecting to login with error.");
@@ -35,22 +38,30 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Check if the cookie has the specific value for a SuperAdmin session
-    // and that the server is configured for such an admin.
+    // Check for SuperAdmin session
     if (sessionCookieValue === SUPERADMIN_COOKIE_VALUE) {
-        // The cookie has the correct value for a SuperAdmin session.
-        // The serverAdminUsername check above ensures the server is minimally configured.
         console.log(`[Middleware] Valid '${SUPERADMIN_COOKIE_VALUE}' cookie found. ADMIN_USERNAME is set on server ('${serverAdminUsername}'). Allowing access to ${pathname}.`);
         return NextResponse.next();
     }
     
-    // If no valid session cookie matching SUPERADMIN_COOKIE_VALUE, redirect to login
-    console.log(`[Middleware] Session cookie for SuperAdmin either not found or value ('${sessionCookieValue}') does not match '${SUPERADMIN_COOKIE_VALUE}'. Redirecting to login for path: ${pathname}.`);
+    // Check for database user session (basic check, full validation by getSession on page/layout)
+    if (sessionCookieValue && sessionCookieValue.startsWith('user_session:')) {
+        const userId = sessionCookieValue.split(':')[1];
+        if (userId) {
+            console.log(`[Middleware] Database user session cookie found for user ID: ${userId}. Allowing request to proceed (further validation by page/layout if needed).`);
+            // For a truly secure setup where middleware fully validates DB users,
+            // getSession would need to be callable from Edge, or an API route would be used for validation.
+            // For now, presence of `user_session:` cookie is deemed sufficient for middleware pass.
+            return NextResponse.next();
+        }
+    }
+    
+    // If no valid session cookie, redirect to login
+    console.log(`[Middleware] Session cookie for SuperAdmin or DB user not found or value invalid. Redirecting to login for path: ${pathname}. Cookie value was: '${sessionCookieValue}'`);
     const loginUrl = new URL('/admin/login', request.url);
     loginUrl.searchParams.set('redirectedFrom', pathname); 
-    if (sessionCookieValue && sessionCookieValue !== SUPERADMIN_COOKIE_VALUE) { 
-        // If a cookie exists but is not the superadmin one (e.g., old or malformed)
-        loginUrl.searchParams.set('error', encodeURIComponent('Your session is invalid. Please log in again.'));
+    if (sessionCookieValue) { 
+        loginUrl.searchParams.set('error', encodeURIComponent('Your session is invalid or has expired. Please log in again.'));
     }
     return NextResponse.redirect(loginUrl);
   }

@@ -70,7 +70,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const getUIText = useCallback((key: string): string => {
-    // Removed user/role specific fallback texts as they are no longer in uiTexts
     if (!isClient) return uiTexts[defaultLanguage]?.[key] || key; 
     return uiTexts[language]?.[key] || uiTexts[defaultLanguage]?.[key] || key;
   }, [language, isClient]);

@@ -16,42 +16,66 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox"; // For multiple role selection
+import { Checkbox } from "@/components/ui/checkbox"; 
 import type { User, Role, CreateUserData } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppContext } from "@/context/AppContext";
 
-const userFormSchema = z.object({
+const userFormSchemaBase = z.object({
   username: z.string().min(3, "Username must be at least 3 characters.").max(50),
   email: z.string().email("Invalid email address.").optional().or(z.literal('')),
-  password: z.string().min(6, "Password must be at least 6 characters.").optional().or(z.literal('')), // Optional for editing if not changing
   roles: z.array(z.string()).default([]), // Array of role IDs
   isActive: z.boolean().default(true),
 });
 
-export type UserFormData = z.infer<typeof userFormSchema>;
+const passwordSchemaPart = z.object({
+  password: z.string().min(6, "Password must be at least 6 characters."),
+  confirmPassword: z.string().min(6, "Confirm password must be at least 6 characters.")
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"], // path of error
+});
+
+const optionalPasswordSchemaPart = z.object({
+  password: z.string().min(6, "Password must be at least 6 characters.").optional().or(z.literal('')),
+  confirmPassword: z.string().min(6, "Confirm password must be at least 6 characters.").optional().or(z.literal('')),
+}).refine(data => {
+    if (data.password && !data.confirmPassword) return false; // if password is set, confirmPassword must be set
+    if (!data.password && data.confirmPassword) return false; // if confirmPassword is set, password must be set
+    if (data.password && data.confirmPassword) return data.password === data.confirmPassword;
+    return true; // if both are empty, it's fine
+}, {
+  message: "Passwords do not match or confirm password is missing",
+  path: ["confirmPassword"],
+});
+
+
+export type UserFormData = z.infer<typeof userFormSchemaBase> & (z.infer<typeof passwordSchemaPart> | z.infer<typeof optionalPasswordSchemaPart>);
 
 interface UserFormProps {
   user?: User | null;
-  roles: Role[]; // All available roles to assign
+  roles: Role[]; 
   onSubmit: (data: UserFormData) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
 }
 
-export default function UserForm({ user, roles, onSubmit, onCancel, isSubmitting }: UserFormProps) {
+export default function UserForm({ user, roles: availableRoles, onSubmit, onCancel, isSubmitting }: UserFormProps) {
   const { getUIText } = useAppContext();
-  const formSchema = user
-    ? userFormSchema.extend({ password: userFormSchema.shape.password.optional() }) // Password optional when editing
-    : userFormSchema.required({ password: true }); // Password required when adding
+  
+  const formSchema = user 
+    ? userFormSchemaBase.merge(optionalPasswordSchemaPart)
+    : userFormSchemaBase.merge(passwordSchemaPart);
+
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       username: user?.username || "",
       email: user?.email || "",
-      password: "", // Always empty initially for security, or handle display differently
+      password: "", 
+      confirmPassword: "",
       roles: user?.roles || [],
       isActive: user?.isActive === undefined ? true : user.isActive,
     },
@@ -97,6 +121,17 @@ export default function UserForm({ user, roles, onSubmit, onCancel, isSubmitting
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Confirm Password {user && !form.getValues("password") ? "(Leave blank to keep current)" : ""}</FormLabel>
+              <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         
         <FormField
           control={form.control}
@@ -104,8 +139,9 @@ export default function UserForm({ user, roles, onSubmit, onCancel, isSubmitting
           render={() => (
             <FormItem>
               <FormLabel>{getUIText("roles")}</FormLabel>
+              <FormDescription>Assign roles to this user.</FormDescription>
               <ScrollArea className="h-32 rounded-md border p-2">
-                {roles.map((role) => (
+                {availableRoles.map((role) => (
                   <FormField
                     key={role.id}
                     control={form.control}
@@ -135,8 +171,8 @@ export default function UserForm({ user, roles, onSubmit, onCancel, isSubmitting
                     }}
                   />
                 ))}
+                 {availableRoles.length === 0 && <p className="text-sm text-muted-foreground p-2">No roles available. Create roles first.</p>}
               </ScrollArea>
-              <FormDescription>Assign roles to this user.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

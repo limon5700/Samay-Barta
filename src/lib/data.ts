@@ -1,10 +1,10 @@
 
 'use server';
 
-import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, DashboardAnalytics } from './types';
+import type { NewsArticle, Gadget, CreateGadgetData, LayoutSection, Category, CreateNewsArticleData, SeoSettings, CreateSeoSettingsData, DashboardAnalytics, User, Role, Permission, CreateUserData, CreateRoleData, UpdateUserData, CreateActivityLogData, ActivityLogEntry, UserActivity } from './types';
 import { connectToDatabase, ObjectId } from './mongodb';
-import { initialSampleNewsArticles } from './constants'; 
-// User/Role related imports and functions are removed
+import { initialSampleNewsArticles, availablePermissions } from './constants'; 
+import bcrypt from 'bcryptjs';
 
 // Helper to map MongoDB document to NewsArticle type
 function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
@@ -19,7 +19,7 @@ function mapMongoDocumentToNewsArticle(doc: any): NewsArticle {
     imageUrl: doc.imageUrl,
     dataAiHint: doc.dataAiHint,
     inlineAdSnippets: doc.inlineAdSnippets || [],
-    // authorId removed
+    authorId: doc.authorId,
     metaTitle: doc.metaTitle,
     metaDescription: doc.metaDescription,
     metaKeywords: doc.metaKeywords || [],
@@ -69,19 +69,65 @@ function mapMongoDocumentToSeoSettings(doc: any): SeoSettings {
     };
 }
 
-export async function getAllNewsArticles(): Promise<NewsArticle[]> {
+// Helper to map MongoDB document to User type
+function mapMongoDocumentToUser(doc: any): User {
+  if (!doc) return null as any;
+  return {
+    id: doc._id.toHexString(),
+    username: doc.username,
+    email: doc.email,
+    passwordHash: doc.passwordHash,
+    roles: doc.roles || [], // Array of role IDs
+    isActive: doc.isActive,
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+  };
+}
+
+// Helper to map MongoDB document to Role type
+function mapMongoDocumentToRole(doc: any): Role {
+  if (!doc) return null as any;
+  return {
+    id: doc._id.toHexString(),
+    name: doc.name,
+    description: doc.description,
+    permissions: doc.permissions || [],
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+  };
+}
+
+// Helper to map MongoDB document to ActivityLogEntry type
+function mapMongoDocumentToActivityLog(doc: any): ActivityLogEntry {
+  if (!doc) return null as any;
+  return {
+    id: doc._id.toHexString(),
+    userId: doc.userId,
+    username: doc.username,
+    action: doc.action,
+    targetType: doc.targetType,
+    targetId: doc.targetId,
+    details: doc.details,
+    timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp,
+  };
+}
+
+
+export async function getAllNewsArticles(authorId?: string): Promise<NewsArticle[]> {
   try {
     const { db } = await connectToDatabase();
     const articlesCollection = db.collection('articles');
     
     const query: any = {};
-    // Removed authorId specific query params
+    if (authorId && authorId !== 'SUPERADMIN_ENV') { // Superadmin sees all
+        query.authorId = authorId;
+    }
 
-    const count = await articlesCollection.countDocuments(query);
+    const count = await articlesCollection.countDocuments(); // Count all, then seed if empty
     if (count === 0 && initialSampleNewsArticles.length > 0) {
         console.log("Seeding initial news articles...");
         const articlesToSeed = initialSampleNewsArticles.map(article => {
-            const { id, authorId, ...restOfArticle } = article; // Exclude frontend 'id' and 'authorId'
+            const { id, ...restOfArticle } = article; // Exclude frontend 'id'
             return {
                 ...restOfArticle,
                 publishedDate: new Date(article.publishedDate), 
@@ -115,7 +161,6 @@ export async function getAllNewsArticles(): Promise<NewsArticle[]> {
 export async function addNewsArticle(articleData: CreateNewsArticleData): Promise<NewsArticle | null> {
   try {
     const { db } = await connectToDatabase();
-    // authorId is removed as auth is disabled
     const newArticleDocument = {
       ...articleData,
       publishedDate: new Date(), 
@@ -151,7 +196,6 @@ export async function updateNewsArticle(id: string, updates: Partial<Omit<NewsAr
     
     const updateDoc: any = { ...updates };
     delete updateDoc.publishedDate; 
-    delete updateDoc.authorId; // Remove authorId from updates
 
     if (updateDoc.inlineAdSnippets === undefined) {
         delete updateDoc.inlineAdSnippets; 
@@ -474,12 +518,227 @@ export async function getActiveGadgetsCount(): Promise<number> {
   }
 }
 
+// User and Role Management Functions
+export async function getAllUsers(): Promise<User[]> {
+  try {
+    const { db } = await connectToDatabase();
+    const usersArray = await db.collection('users').find().toArray();
+    return usersArray.map(mapMongoDocumentToUser);
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    return [];
+  }
+}
+
+export async function getUserById(id: string): Promise<User | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const userDoc = await db.collection('users').findOne({ _id: new ObjectId(id) });
+    return userDoc ? mapMongoDocumentToUser(userDoc) : null;
+  } catch (error) {
+    console.error("Error fetching user by ID:", error);
+    return null;
+  }
+}
+
+export async function getUserByUsername(username: string): Promise<User | null> {
+  try {
+    const { db } = await connectToDatabase();
+    const userDoc = await db.collection('users').findOne({ username: username });
+    return userDoc ? mapMongoDocumentToUser(userDoc) : null;
+  } catch (error) {
+    console.error("Error fetching user by username:", error);
+    return null;
+  }
+}
+
+export async function addUser(userData: CreateUserData): Promise<User | null> {
+  if (!userData.password) {
+    console.error("Password is required to create a new user.");
+    throw new Error("Password is required.");
+  }
+  try {
+    const { db } = await connectToDatabase();
+    const existingUser = await db.collection('users').findOne({ username: userData.username });
+    if (existingUser) {
+      throw new Error("Username already exists.");
+    }
+    if(userData.email){
+        const existingEmail = await db.collection('users').findOne({ email: userData.email });
+        if(existingEmail){
+            throw new Error("Email already exists.");
+        }
+    }
+
+
+    const passwordHash = await bcrypt.hash(userData.password, 10);
+    const newUserDocument = {
+      username: userData.username,
+      email: userData.email,
+      passwordHash: passwordHash,
+      roles: userData.roles || [],
+      isActive: userData.isActive === undefined ? true : userData.isActive,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    };
+    const result = await db.collection('users').insertOne(newUserDocument);
+    if (result.acknowledged && newUserDocument._id) {
+      const insertedDoc = await db.collection('users').findOne({ _id: newUserDocument._id });
+      return mapMongoDocumentToUser(insertedDoc);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error adding user:", error);
+    throw error; // Re-throw to be caught by form handler
+  }
+}
+
+export async function updateUser(id: string, updates: UpdateUserData): Promise<User | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const objectId = new ObjectId(id);
+    const updateDoc: any = { ...updates };
+
+    if (updates.password) {
+      updateDoc.passwordHash = await bcrypt.hash(updates.password, 10);
+      delete updateDoc.password; 
+    }
+    updateDoc.updatedAt = new Date();
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { _id: objectId },
+      { $set: updateDoc },
+      { returnDocument: 'after' }
+    );
+    return result ? mapMongoDocumentToUser(result) : null;
+  } catch (error) {
+    console.error("Error updating user:", error);
+    throw error;
+  }
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+  try {
+    const { db } = await connectToDatabase();
+    const result = await db.collection('users').deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount === 1;
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return false;
+  }
+}
+
+export async function getAllRoles(): Promise<Role[]> {
+  try {
+    const { db } = await connectToDatabase();
+    const rolesArray = await db.collection('roles').find().toArray();
+    return rolesArray.map(mapMongoDocumentToRole);
+  } catch (error) {
+    console.error("Error fetching all roles:", error);
+    return [];
+  }
+}
+
+export async function getRoleById(id: string): Promise<Role | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const roleDoc = await db.collection('roles').findOne({ _id: new ObjectId(id) });
+    return roleDoc ? mapMongoDocumentToRole(roleDoc) : null;
+  } catch (error) {
+    console.error("Error fetching role by ID:", error);
+    return null;
+  }
+}
+
+export async function addRole(roleData: CreateRoleData): Promise<Role | null> {
+  try {
+    const { db } = await connectToDatabase();
+     const existingRole = await db.collection('roles').findOne({ name: roleData.name });
+    if (existingRole) {
+      throw new Error("Role name already exists.");
+    }
+    const newRoleDocument = {
+      ...roleData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    };
+    const result = await db.collection('roles').insertOne(newRoleDocument);
+    if (result.acknowledged && newRoleDocument._id) {
+      const insertedDoc = await db.collection('roles').findOne({ _id: newRoleDocument._id });
+      return mapMongoDocumentToRole(insertedDoc);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error adding role:", error);
+    throw error;
+  }
+}
+
+export async function updateRole(id: string, updates: Partial<CreateRoleData>): Promise<Role | null> {
+  if (!ObjectId.isValid(id)) return null;
+  try {
+    const { db } = await connectToDatabase();
+    const objectId = new ObjectId(id);
+    const updateDoc = { ...updates, updatedAt: new Date() };
+
+    const result = await db.collection('roles').findOneAndUpdate(
+      { _id: objectId },
+      { $set: updateDoc },
+      { returnDocument: 'after' }
+    );
+    return result ? mapMongoDocumentToRole(result) : null;
+  } catch (error) {
+    console.error("Error updating role:", error);
+    throw error;
+  }
+}
+
+export async function deleteRole(id: string): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+  try {
+    const { db } = await connectToDatabase();
+    // Optionally, remove this role from all users who have it
+    // await db.collection('users').updateMany({ roles: id }, { $pull: { roles: id } });
+    const result = await db.collection('roles').deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount === 1;
+  } catch (error) {
+    console.error("Error deleting role:", error);
+    return false;
+  }
+}
+
+export async function getPermissionsForUser(userId: string): Promise<Permission[]> {
+  const user = await getUserById(userId);
+  if (!user) return [];
+
+  const userPermissions = new Set<Permission>();
+  if (user.roles && user.roles.length > 0) {
+    const rolesPromises = user.roles.map(roleId => getRoleById(roleId));
+    const roles = await Promise.all(rolesPromises);
+    roles.forEach(role => {
+      if (role && role.permissions) {
+        role.permissions.forEach(permission => userPermissions.add(permission));
+      }
+    });
+  }
+  return Array.from(userPermissions);
+}
+
+
 export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
   try {
     const articlesStats = await getArticlesStats();
     const activeGadgets = await getActiveGadgetsCount();
+    const { db } = await connectToDatabase();
+    const totalUsers = await db.collection('users').countDocuments(); // Count DB users
 
-    // User-related stats are removed as authentication is disabled
+    // Visitor stats would require a separate tracking mechanism
     const visitorStats = {
       today: 0, 
       activeNow: 0,
@@ -488,19 +747,57 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
       lastMonth: 0,
     };
 
+    // const userPostActivity = await getTopUserPostActivity(); // Implement this if needed
+
     return {
       totalArticles: articlesStats.totalArticles,
       articlesToday: articlesStats.articlesToday,
+      totalUsers,
       activeGadgets,
       visitorStats,
+      // userPostActivity: Array.isArray(userPostActivity) ? userPostActivity : [],
     };
   } catch (error) {
     console.error("Error fetching dashboard analytics:", error);
     return {
       totalArticles: 0,
       articlesToday: 0,
+      totalUsers: 0,
       activeGadgets: 0,
       visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0 },
+      userPostActivity: [],
     };
   }
+}
+
+// Stub for Activity Log
+export async function addActivityLogEntry(logData: CreateActivityLogData): Promise<ActivityLogEntry | null> {
+  try {
+    const { db } = await connectToDatabase();
+    const newLogEntry = {
+      ...logData,
+      timestamp: new Date(),
+      _id: new ObjectId(),
+    };
+    const result = await db.collection('activity_logs').insertOne(newLogEntry);
+    if (result.acknowledged && newLogEntry._id) {
+      const insertedDoc = await db.collection('activity_logs').findOne({ _id: newLogEntry._id });
+      console.log("Activity logged:", insertedDoc?.action, "by", insertedDoc?.username);
+      return mapMongoDocumentToActivityLog(insertedDoc);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error adding activity log entry:", error);
+    // Don't throw error here to prevent breaking main operations
+    return null;
+  }
+}
+
+// Stub for fetching user post activity
+export async function getTopUserPostActivity(limit: number = 5): Promise<UserActivity[]> {
+    // This function would typically involve an aggregation pipeline on the 'articles' collection
+    // to count posts by 'authorId', then join with 'users' collection to get usernames.
+    // For now, returning an empty array as a placeholder.
+    console.warn("getTopUserPostActivity is a stub and not fully implemented.");
+    return [];
 }

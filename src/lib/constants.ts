@@ -1,5 +1,5 @@
 
-import type { NewsArticle, Category } from './types'; // Permission type removed
+import type { NewsArticle, Category, Permission } from './types';
 
 export interface LanguageOption {
   value: string;
@@ -78,7 +78,43 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleOgDescriptionLabel: "Open Graph Description (Social)",
     articleOgImageLabel: "Open Graph Image URL (Social)",
     articleCanonicalUrlLabel: "Canonical URL (Advanced)",
-    // User Roles related texts are removed
+    // User Roles related texts
+    manageUsers: "Manage Users & Roles",
+    username: "Username",
+    email: "Email",
+    password: "Password",
+    roles: "Roles",
+    userActive: "User Active",
+    addUser: "Add User",
+    editUser: "Edit User",
+    deleteUser: "Delete User",
+    confirmDeleteUser: "Are you sure you want to delete this user?",
+    userCreated: "User created successfully.",
+    userUpdated: "User updated successfully.",
+    userDeleted: "User deleted successfully.",
+    manageRoles: "Manage Roles",
+    roleName: "Role Name",
+    roleDescription: "Description (Optional)",
+    permissions: "Permissions",
+    addRole: "Add Role",
+    editRole: "Edit Role",
+    deleteRole: "Delete Role",
+    confirmDeleteRole: "Are you sure you want to delete this role? This will unassign it from all users.",
+    roleCreated: "Role created successfully.",
+    roleUpdated: "Role updated successfully.",
+    roleDeleted: "Role deleted successfully.",
+    cancel: "Cancel",
+    save: "Save",
+    viewAdminDashboardPermission: "View Admin Dashboard",
+    manageArticlesPermission: "Manage Articles",
+    publishArticlesPermission: "Publish Articles",
+    manageUsersPermission: "Manage Users",
+    manageRolesPermission: "Manage Roles",
+    manageLayoutGadgetsPermission: "Manage Layout/Gadgets",
+    manageSeoGlobalPermission: "Manage Global SEO",
+    manageSettingsPermission: "Manage Site Settings",
+    userAndRoleManagement: "User & Role Mgmt",
+    activityLog: "Activity Log",
   },
   bn: {
     appName: "সময় বার্তা লাইট",
@@ -136,7 +172,43 @@ export const uiTexts: Record<string, Record<string, string>> = {
     articleOgDescriptionLabel: "ওপেন গ্রাফ বর্ণনা (সোশ্যাল)",
     articleOgImageLabel: "ওপেন গ্রাফ ছবির ইউআরএল (সোশ্যাল)",
     articleCanonicalUrlLabel: "ক্যানোনিকাল ইউআরএল (অ্যাডভান্সড)",
-    // User Roles related texts are removed
+    // User Roles related texts - Bengali
+    manageUsers: "ব্যবহারকারী ও ভূমিকা পরিচালনা",
+    username: "ব্যবহারকারীর নাম",
+    email: "ইমেইল",
+    password: "পাসওয়ার্ড",
+    roles: "ভূমিকা",
+    userActive: "ব্যবহারকারী সক্রিয়",
+    addUser: "ব্যবহারকারী যোগ করুন",
+    editUser: "ব্যবহারকারী সম্পাদনা করুন",
+    deleteUser: "ব্যবহারকারী মুছুন",
+    confirmDeleteUser: "আপনি কি সত্যিই এই ব্যবহারকারীকে মুছতে চান?",
+    userCreated: "ব্যবহারকারী সফলভাবে তৈরি করা হয়েছে।",
+    userUpdated: "ব্যবহারকারী সফলভাবে আপডেট করা হয়েছে।",
+    userDeleted: "ব্যবহারকারী সফলভাবে মুছে ফেলা হয়েছে।",
+    manageRoles: "ভূমিকা পরিচালনা করুন",
+    roleName: "ভূমিকার নাম",
+    roleDescription: "বর্ণনা (ঐচ্ছিক)",
+    permissions: "অনুমতিসমূহ",
+    addRole: "ভূমিকা যোগ করুন",
+    editRole: "ভূমিকা সম্পাদনা করুন",
+    deleteRole: "ভূমিকা মুছুন",
+    confirmDeleteRole: "আপনি কি সত্যিই এই ভূমিকাটি মুছতে চান? এটি সমস্ত ব্যবহারকারীর কাছ থেকে এটিকে সরিয়ে ফেলবে।",
+    roleCreated: "ভূমিকা সফলভাবে তৈরি করা হয়েছে।",
+    roleUpdated: "ভূমিকা সফলভাবে আপডেট করা হয়েছে।",
+    roleDeleted: "ভূমিকা সফলভাবে মুছে ফেলা হয়েছে।",
+    cancel: "বাতিল করুন",
+    save: "সংরক্ষণ করুন",
+    viewAdminDashboardPermission: "অ্যাডমিন ড্যাশবোর্ড দেখুন",
+    manageArticlesPermission: "নিবন্ধ পরিচালনা করুন",
+    publishArticlesPermission: "নিবন্ধ প্রকাশ করুন",
+    manageUsersPermission: "ব্যবহারকারী পরিচালনা করুন",
+    manageRolesPermission: "ভূমিকা পরিচালনা করুন",
+    manageLayoutGadgetsPermission: "লেআউট/গ্যাজেট পরিচালনা করুন",
+    manageSeoGlobalPermission: "গ্লোবাল এসইও পরিচালনা করুন",
+    manageSettingsPermission: "সাইট সেটিংস পরিচালনা করুন",
+    userAndRoleManagement: "ব্যবহারকারী ও ভূমিকা",
+    activityLog: "কার্যকলাপ লগ",
   },
 };
 
@@ -152,6 +224,7 @@ export const initialSampleNewsArticles: NewsArticle[] = [
     publishedDate: '2024-07-28T10:00:00Z',
     imageUrl: 'https://picsum.photos/seed/tech1/400/200',
     dataAiHint: 'circuit board',
+    authorId: 'env_superadmin', // Example authorId
     metaTitle: 'Tech Giant Unveils Phoenix-7B AI Model',
     metaDescription: 'Explore the groundbreaking Phoenix-7B AI model, set to redefine natural language processing. Learn about its features and future applications.',
     metaKeywords: ['AI', 'Artificial Intelligence', 'Phoenix-7B', 'Tech Giant', 'NLP'],
@@ -165,7 +238,17 @@ export const initialSampleNewsArticles: NewsArticle[] = [
     publishedDate: '2024-07-27T22:30:00Z',
     imageUrl: 'https://picsum.photos/seed/sports1/400/200',
     dataAiHint: 'stadium lights',
+    authorId: 'env_superadmin', // Example authorId
   },
 ];
 
-// availablePermissions array removed
+export const availablePermissions: Permission[] = [
+  'view_admin_dashboard',
+  'manage_articles',
+  'publish_articles',
+  'manage_users',
+  'manage_roles',
+  'manage_layout_gadgets',
+  'manage_seo_global',
+  'manage_settings',
+];

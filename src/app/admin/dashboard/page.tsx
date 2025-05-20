@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PlusCircle, Edit, Trash2, Loader2, BarChartBig, FileText, Zap, Activity, CalendarClock, Eye, AlertTriangle } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Loader2, BarChartBig, FileText, Zap, Users, CalendarClock, Eye, AlertTriangle, Activity } from "lucide-react";
 import { formatInTimeZone } from 'date-fns-tz';
 import { Button } from "@/components/ui/button";
 import {
@@ -23,24 +23,28 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import ArticleForm, { type ArticleFormData } from "@/components/admin/ArticleForm";
-import type { NewsArticle, CreateNewsArticleData, DashboardAnalytics } from "@/lib/types";
+import type { NewsArticle, CreateNewsArticleData, DashboardAnalytics, UserActivity } from "@/lib/types";
 import {
   getAllNewsArticles,
   addNewsArticle,
   updateNewsArticle,
   deleteNewsArticle,
   getDashboardAnalytics,
-} from "@/lib/data"; // Removed getTopUserPostActivity
+  addActivityLogEntry,
+  // getTopUserPostActivity, // This needs to be created if desired
+} from "@/lib/data"; 
 import { useToast } from "@/hooks/use-toast";
 import AnalyticsCard from "@/components/admin/AnalyticsCard";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { getSession } from "@/app/admin/auth/actions";
 
 const DHAKA_TIMEZONE = 'Asia/Dhaka';
 
 export default function DashboardPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
-  // Removed topUsersActivity state
+  const [topUsersActivity, setTopUsersActivity] = useState<UserActivity[]>([]);
+
 
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
@@ -68,7 +72,7 @@ export default function DashboardPage() {
                 If the dashboard is blank or not loading correctly, please check the following:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-                <li><strong>Environment Variables:</strong> Ensure <code>MONGODB_URI</code> and <code>GEMINI_API_KEY</code> (if AI features used) are correctly set. For local development, ensure they are correct in your <code>.env</code> file. For Vercel, set them in project settings.</li>
+                <li><strong>Environment Variables:</strong> Ensure <code>MONGODB_URI</code>, <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code>, and <code>GEMINI_API_KEY</code> (if AI features used) are correctly set. For local development, ensure they are correct in your <code>.env</code> file. For Vercel, set them in project settings.</li>
                 <li><strong>Database Connectivity:</strong> Verify your MongoDB Atlas IP allowlist. Check if your MongoDB cluster is running.</li>
                 <li><strong>API Keys:</strong> Confirm your <code>GEMINI_API_KEY</code> is valid.</li>
                 <li><strong>Server Logs:</strong> Check Vercel deployment logs or local terminal for detailed error messages.</li>
@@ -85,19 +89,20 @@ export default function DashboardPage() {
     setIsAnalyticsLoading(true);
     setPageError(null);
     try {
-      // Removed topUsersData fetch
+      // const topUsersData = await getTopUserPostActivity(); // Uncomment when function is ready
       const analyticsData = await getDashboardAnalytics();
       
-      setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
-      // Removed setTopUsersActivity
+      setAnalytics(analyticsData ?? { totalArticles: 0, articlesToday: 0, totalUsers:0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
+      // setTopUsersActivity(Array.isArray(topUsersData) ? topUsersData : []); // Uncomment when function is ready
+      setTopUsersActivity([]); // Placeholder
       console.log("DashboardPage: Analytics data fetched successfully.");
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : "An unknown error occurred";
       console.error("DashboardPage: Failed to fetch dashboard analytics:", error);
       toast({ title: "Error", description: `Failed to fetch dashboard analytics: ${msg}`, variant: "destructive" });
-      setAnalytics({ totalArticles: 0, articlesToday: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
-      // Removed setTopUsersActivity for error case
+      setAnalytics({ totalArticles: 0, articlesToday: 0, totalUsers: 0, activeGadgets: 0, visitorStats: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, activeNow: 0 } });
+      setTopUsersActivity([]);
       setPageError(`Analytics fetch failed: ${msg}. Check server logs for details.`);
     } finally {
       setIsAnalyticsLoading(false);
@@ -163,10 +168,19 @@ export default function DashboardPage() {
     if (!articleToDelete) return;
     setIsSubmitting(true);
     try {
+      const session = await getSession();
       const success = await deleteNewsArticle(articleToDelete.id);
       if (success) {
         await Promise.all([fetchArticles(), fetchDashboardData()]);
         toast({ title: "Success", description: "Article deleted successfully." });
+         await addActivityLogEntry({ 
+            userId: session?.userId || 'unknown', 
+            username: session?.username || 'Unknown User', 
+            action: 'article_deleted', 
+            targetType: 'article', 
+            targetId: articleToDelete.id,
+            details: { deletedTitle: articleToDelete.title }
+        });
       } else {
         toast({ title: "Error", description: "Failed to delete article.", variant: "destructive" });
       }
@@ -184,14 +198,19 @@ export default function DashboardPage() {
   const handleFormSubmit = async (data: ArticleFormData) => {
     setIsSubmitting(true);
     try {
+      const session = await getSession(); // Get current user for authorId and activity log
+      const authorIdToSave = session?.userId || 'SUPERADMIN_ENV'; // Default to superadmin if no specific user
+      const authorUsernameToSave = session?.username || 'SuperAdmin';
+
       if (editingArticle) {
-         const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = { // authorId removed from Omit
+         const updateData: Partial<Omit<NewsArticle, 'id' | 'publishedDate'>> = { 
             title: data.title,
             content: data.content,
             excerpt: data.excerpt,
             category: data.category,
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
+            authorId: authorIdToSave,
             inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
             metaTitle: data.metaTitle,
             metaDescription: data.metaDescription,
@@ -207,6 +226,14 @@ export default function DashboardPage() {
         const result = await updateNewsArticle(editingArticle.id, updateData);
         if (result) {
           toast({ title: "Success", description: "Article updated successfully." });
+           await addActivityLogEntry({ 
+              userId: authorIdToSave, 
+              username: authorUsernameToSave, 
+              action: 'article_updated', 
+              targetType: 'article', 
+              targetId: editingArticle.id,
+              details: { updatedTitle: result.title, fieldsUpdated: Object.keys(updateData) }
+          });
         } else {
            toast({ title: "Error", description: "Failed to update article.", variant: "destructive" });
         }
@@ -218,6 +245,7 @@ export default function DashboardPage() {
             category: data.category,
             imageUrl: data.imageUrl,
             dataAiHint: data.dataAiHint,
+            authorId: authorIdToSave,
             inlineAdSnippets: data.inlineAdSnippetsInput?.split('\n\n').map(s => s.trim()).filter(s => s !== '') || [],
             metaTitle: data.metaTitle,
             metaDescription: data.metaDescription,
@@ -233,6 +261,14 @@ export default function DashboardPage() {
         const result = await addNewsArticle(createData);
          if (result) {
             toast({ title: "Success", description: "Article added successfully." });
+            await addActivityLogEntry({ 
+              userId: authorIdToSave, 
+              username: authorUsernameToSave, 
+              action: 'article_created', 
+              targetType: 'article', 
+              targetId: result.id,
+              details: { newTitle: result.title }
+            });
         } else {
             toast({ title: "Error", description: "Failed to add article.", variant: "destructive" });
         }
@@ -283,7 +319,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <AnalyticsCard title="Total Articles" value={analytics.totalArticles.toString()} icon={FileText} />
                 <AnalyticsCard title="Articles Today" value={analytics.articlesToday.toString()} icon={CalendarClock} />
-                {/* Total Users card removed */}
+                <AnalyticsCard title="Total Users" value={analytics.totalUsers.toString()} icon={Users} />
                 <AnalyticsCard title="Active Gadgets" value={analytics.activeGadgets.toString()} icon={Zap} />
                 
                 <AnalyticsCard title="Visitors Today" value={analytics.visitorStats?.today?.toString() ?? "N/A"} icon={Eye} description="Requires tracking setup" />
@@ -297,7 +333,33 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {/* Top User Activity section removed */}
+        {/* Top User Activity section - can be re-enabled when getTopUserPostActivity is ready */}
+        {/* 
+        <Card className="shadow-lg rounded-xl mb-8">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-primary">Top User Activity</CardTitle>
+            <CardDescription>Users with the most article posts.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topUsersActivity.length > 0 ? (
+              <Table>
+                <TableHeader><TableRow><TableHead>Username</TableHead><TableHead>Posts</TableHead><TableHead>Last Post</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {topUsersActivity.map(user => (
+                    <TableRow key={user.userId}>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.postCount}</TableCell>
+                      <TableCell>{user.lastPostDate ? formatInTimeZone(new Date(user.lastPostDate), DHAKA_TIMEZONE, "MMM d, yyyy") : 'N/A'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No user activity data available.</p>
+            )}
+          </CardContent>
+        </Card>
+        */}
 
         <Card className="shadow-lg rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between">
