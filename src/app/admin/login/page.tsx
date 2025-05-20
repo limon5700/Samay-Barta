@@ -76,7 +76,7 @@ export default function LoginPage() {
         // This is an unexpected state if loginAction is supposed to redirect server-side.
         console.warn("LoginPage: loginAction returned success but did not throw NEXT_REDIRECT. This is unexpected if redirect() was called.");
         // Attempt client-side redirect as a fallback if server redirect signal wasn't caught
-        if (result.redirectPath) {
+        if (result.redirectPath) { // redirectPath might not exist on success if redirect() was used
             console.log("LoginPage: Fallback client-side redirect to:", result.redirectPath);
             router.push(result.redirectPath);
             // Return here to prevent setIsLoading(false) if redirecting

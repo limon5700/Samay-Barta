@@ -34,7 +34,6 @@ export async function loginAction(formData: LoginFormData): Promise<{ success: b
   console.log("loginAction: Invoked. ABOUT TO CHECK LOGIN ENV VARS.");
   const envCheckResult = await checkLoginRequiredEnvVars();
   if (envCheckResult.error) {
-    // This error will be caught by the login page and displayed
     return { success: false, error: envCheckResult.error };
   }
 
