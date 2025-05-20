@@ -14,8 +14,6 @@ if (!MONGODB_URI || MONGODB_URI.trim() === "") {
   );
 }
 
-// Enhanced check for common placeholders to prevent EBADNAME errors and guide the user.
-const placeholderPattern = /<[^>]+>/g; // Matches any string in angle brackets e.g. <username>
 const commonPlaceholders = ['YOUR_CLUSTER_URL', 'YOUR_DB_NAME', 'YOUR_USERNAME', 'YOUR_PASSWORD', '<cluster-url>', '<dbname>', '<username>', '<password>'];
 
 if (commonPlaceholders.some(ph => MONGODB_URI.includes(ph))) {
@@ -37,7 +35,8 @@ if (commonPlaceholders.some(ph => MONGODB_URI.includes(ph))) {
 
 if (!MONGODB_URI.startsWith('mongodb://') && !MONGODB_URI.startsWith('mongodb+srv://')) {
     console.error("🔴 CRITICAL ERROR: Invalid MONGODB_URI scheme.");
-    console.error(`   The connection string you provided ("${MONGODB_URI.substring(0, 30)}...") is invalid because it MUST start with "mongodb://" or "mongodb+srv://".`);
+    console.error(`   The connection string you provided starts with: "${MONGODB_URI.substring(0, 20)}..."`);
+    console.error(`   It MUST start with "mongodb://" or "mongodb+srv://".`);
     console.error("   Please check and correct the MONGODB_URI in your .env file or your hosting provider's environment variable settings.");
     throw new Error(
         'Invalid MONGODB_URI scheme. The connection string must start with "mongodb://" or "mongodb+srv://". Please check your .env file.'
@@ -49,37 +48,26 @@ interface MongoConnection {
   db: Db;
 }
 
-// Global is used here to maintain a cached connection across hot reloads
-// in development. This prevents connections from growing exponentially
-// during API Route usage.
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
 
 export async function connectToDatabase(): Promise<MongoConnection> {
   if (cachedClient && cachedDb) {
-    // Ensure the client is still connected before returning cache
     try {
-      // Ping the database to check connection status
-      // Using admin command as it's lightweight and always available
       await cachedDb.admin().ping();
-      // console.log("Using cached MongoDB connection.");
     } catch (error) {
       console.warn("Cached MongoDB connection lost, attempting to reconnect.", error);
       cachedClient = null;
       cachedDb = null;
-      // Fall through to reconnect
     }
     if (cachedClient && cachedDb) {
         return { client: cachedClient, db: cachedDb };
     }
   }
   
-  // Redundant check due to top-level, but good for safety within function scope
   if (!MONGODB_URI) { 
-    // This specific error should have been caught by the top-level check,
-    // but added here for defensive programming.
     throw new Error(
-      'MONGODB_URI is not defined. This should have been caught earlier. Please set it in your .env file.'
+      'MONGODB_URI is not defined. This should have been caught by the top-level check. Please set it in your .env file.'
     );
   }
 
@@ -93,34 +81,25 @@ export async function connectToDatabase(): Promise<MongoConnection> {
   });
 
   try {
-    // console.log("Attempting to connect to MongoDB...");
     await client.connect();
-    // console.log("Successfully initiated connection to MongoDB.");
     
     let dbName;
     try {
-        // Attempt to parse the URI to find the database name
         const url = new URL(MONGODB_URI);
-        // The database name is usually the first segment after the host in the pathname
-        // e.g., mongodb+srv://user:pass@cluster.mongodb.net/MY_DATABASE?retryWrites=true
-        // or mongodb://localhost:27017/MY_DATABASE
         const pathSegments = url.pathname.substring(1).split('/');
         dbName = pathSegments[0] || undefined; 
 
         if (!dbName && MONGODB_URI.startsWith('mongodb+srv://')) {
             console.warn(`Database name not explicitly found in MONGODB_URI path for SRV connection: ${url.pathname}. The driver will use the default database specified in your connection string options or 'test' if none is found. Ensure your SRV URI is complete, like 'mongodb+srv://user:pass@cluster/<dbname>?options'.`);
         } else if (!dbName) {
-            // For non-SRV URIs, a missing DB name in path usually means driver defaults to 'test'.
             console.warn(`Database name not found in MONGODB_URI path: ${url.pathname}. The driver may default to 'test'. Ensure your URI includes the database name, like 'mongodb://host/<dbname>'.`);
         }
     } catch (e: any) {
         console.error("Could not parse MONGODB_URI to extract database name. This might indicate a malformed URI. URI used (password and username masked for security):", MONGODB_URI.replace(/:\/\/([^:]+):([^@]+)@/, '://<user>:****@'));
         console.error("Parsing error details:", e.message);
-        // If parsing fails, dbName will be undefined, and client.db() will use the default database
-        // or one specified directly in the connection string options (if any).
     }
 
-    const db = client.db(dbName); // If dbName is undefined, MongoDB driver typically uses 'test' or one specified in URI options.
+    const db = client.db(dbName); 
     
     cachedClient = client;
     cachedDb = db;
